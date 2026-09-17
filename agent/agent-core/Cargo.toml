@@ -1,0 +1,9 @@
+[package]
+name = "agent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "agent_core"
+path = "src/lib.rs"
