@@ -19,8 +19,9 @@ jobs:
       - name: Buf lint
         run: buf lint proto/
 
-      - name: Buf breaking (against main)
-        run: buf breaking proto/ --against '.git#branch=main'
+      - name: Buf breaking (against main, PRs only)
+        if: github.event_name == 'pull_request'
+        run: buf breaking proto/ --against '.git#branch=origin/main'
 
       - name: Buf generate check (if configured)
         run: |
