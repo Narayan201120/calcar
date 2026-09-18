@@ -5,5 +5,3 @@ lint:
 breaking:
   use:
     - FILE
-  against:
-    - '.git#branch=main'
