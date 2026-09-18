@@ -287,3 +287,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - No protoc or buf binary locally, so real compile and cross language round trip still need CI before the P1 gate is fully green.
   - go_package path and protocol version shape are placeholders for backend and envelope owners to confirm.
 - **Status:** Implemented
+
+## DEC-023 P1 CI fixes to green
+- **Date/Context:** Sept 18 2026, P1 gate, two red CI runs then green on run 35346700812
+- **Context/What:** Fixed proto/buf.yaml by removing the CLI only against key and moving DEFAULT to STANDARD, and scoped buf breaking to pull requests against origin/main since direct pushes to a single main branch compare the branch against itself.
+- **The "Why":** Two CI failures blocked the P1 gate: an invalid buf config field and a breaking check that built the against side from a bare single branch push.
+- **Improvement over Previous Solution:** Replaced a red P1 gate with lint plus structural checks green on every push and breaking enforced where it matters, on PRs.
+- **Pros:**
+  - Fast 9 second signal on push, compat enforced on review.
+  - No more confusion between buf config fields and CLI flags.
+- **Cons & Trade-offs:**
+  - Direct pushes to main skip the breaking check by design.
+  - Cross language round trip still open until backend, agent, and mobile generate from v1.
+- **Status:** Implemented
