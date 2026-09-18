@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+import "calcar/v1/approvals.proto";
+import "calcar/v1/commands.proto";
+import "calcar/v1/connection.proto";
+import "calcar/v1/devices.proto";
+import "calcar/v1/events.proto";
+import "calcar/v1/sessions.proto";
+import "calcar/v1/workflows.proto";
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// WebSocket envelope. PRD 9.6 (typed protobuf contract), PRD 9.7 (realtime
+// transport for events, commands, approvals, connection state), PRD 32
+// (replay protection: unique ids plus nonces).
+// Every realtime frame is one Envelope. Receivers ignore unknown fields
+// so additive minor changes stay compatible; breaking change means v2
+// (PLAN P1). Protocol versioning is additive-only on v1.
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+message Envelope {
+  string protocol_version = 1; // Contract version, e.g. "1.0". Major bump means v2 package.
+  string message_id = 2;       // UUID per frame, dedupe key for receivers.
+  string sender_device_id = 3; // Routing id only, never proof (PRD 35).
+  int64 sent_at_millis = 4;    // int64 unix millis (UTC), no google types.
+  bytes nonce = 5;             // Per-message nonce, rejected when reused (PRD 32).
+
+  oneof payload {
+    DeviceIdentity device_identity = 10;
+    PairingSession pairing_session = 11;
+    JoinRequest join_request = 12;
+    AuthorizationRecord authorization_record = 13;
+    Revocation revocation = 14;
+    Workflow workflow = 20;
+    WorkflowEvent workflow_event = 21;
+    WorkflowCommand workflow_command = 22;
+    CommandAck command_ack = 23;
+    CommandResult command_result = 24;
+    ApprovalRequest approval_request = 25;
+    ApprovalResolution approval_resolution = 26;
+    ProviderSession provider_session = 27;
+    Presence presence = 30;
+    Heartbeat heartbeat = 31;
+    ReconnectRequest reconnect_request = 32;
+    StateSnapshot state_snapshot = 33;
+  }
+}

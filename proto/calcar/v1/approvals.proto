@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Approval handling. PRD 25 (approval handling), PRD 29 (notifications carry
+// ids and kind only), PRD 32 (replay protection).
+// Single-resolve rule: the first valid resolution wins. Later resolves,
+// resolves after expiry, and resolves of an already-resolved request must
+// be rejected and reported as superseded/expired.
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_LOW = 1;
+  RISK_LEVEL_MEDIUM = 2;
+  RISK_LEVEL_HIGH = 3;
+}
+
+enum ApprovalDecision {
+  APPROVAL_DECISION_UNSPECIFIED = 0;
+  APPROVAL_DECISION_ALLOW = 1;
+  APPROVAL_DECISION_REJECT = 2;
+}
+
+// Lifecycle of one approval request: pending -> allow/reject, or expiry.
+// Expired or already-resolved requests cannot be accepted again (PRD 25).
+enum ApprovalState {
+  APPROVAL_STATE_UNSPECIFIED = 0;
+  APPROVAL_STATE_PENDING = 1;
+  APPROVAL_STATE_APPROVED = 2;
+  APPROVAL_STATE_REJECTED = 3;
+  APPROVAL_STATE_EXPIRED = 4;
+  APPROVAL_STATE_SUPERSEDED = 5; // A newer request replaced this one.
+}
+
+// Provider approval converted to the common model. PRD 25.
+message ApprovalRequest {
+  string approval_id = 1;
+  string workflow_id = 2;
+  string provider_session_id = 3;
+  string summary = 4;             // Short display text, e.g. "npm install stripe".
+  string detail_pointer = 5;      // Pointer to full detail, fetched over auth channel.
+  RiskLevel risk_level = 6;
+  ApprovalState state = 7;
+  int64 created_at_millis = 8;    // int64 unix millis (UTC), no google types.
+  int64 expires_at_millis = 9;    // int64 unix millis (UTC). Past expiry: reject resolves.
+}
+
+// Phone response bound to the exact workflow, session, request, and device.
+// PRD 25. Single resolve wins, see file comment.
+message ApprovalResolution {
+  string approval_id = 1;
+  string workflow_id = 2;
+  ApprovalDecision decision = 3;  // ALLOW or REJECT. No other outcome.
+  string resolver_device_id = 4;  // Trusted phone that resolved it.
+  bytes signature = 5;            // Ed25519 signature over approval + decision + nonce (DEC-019).
+  bytes nonce = 6;                // Unique nonce, rejected when reused (PRD 32).
+  string idempotency_key = 7;     // Retried resolves reuse it, no double-apply.
+  int64 resolved_at_millis = 8;   // int64 unix millis (UTC), no google types.
+}

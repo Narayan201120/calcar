@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+import "calcar/v1/workflows.proto";
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Persistent provider sessions. PRD 23 (persistent sessions), PRD 30 (agent
+// session manager), PRD 40 (reconnect recovers the same session).
+// The Agent owns the binding; the phone only holds the opaque resume token
+// plus the last seq no it has seen. Provider transcripts stay provider
+// native; this record stores pointers only (DEC-021).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+message ProviderSession {
+  string provider_session_id = 1;
+  string workflow_id = 2;
+  Provider provider = 3;          // Reuses workflows.proto provider enum.
+  bytes resume_token = 4;         // Opaque provider resume token, never interpreted.
+  uint64 last_seq_no = 5;         // Last event seq no the phone has applied.
+  int64 updated_at_millis = 6;    // int64 unix millis (UTC), no google types.
+}

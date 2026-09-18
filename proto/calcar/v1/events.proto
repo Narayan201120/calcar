@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Event stream. PRD 21 (provider adapter event model), PRD 28 (workflow
+// screen prefers useful events over raw logs), PRD 37 (privacy: terminal
+// output and project content stay on the computer).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+// Common event set. PRD 21.
+enum WorkflowEventType {
+  WORKFLOW_EVENT_TYPE_UNSPECIFIED = 0;
+  WORKFLOW_EVENT_TYPE_AGENT_STARTED = 1;
+  WORKFLOW_EVENT_TYPE_COMMAND_STARTED = 2;
+  WORKFLOW_EVENT_TYPE_COMMAND_COMPLETED = 3;
+  WORKFLOW_EVENT_TYPE_FILE_CHANGED = 4;
+  WORKFLOW_EVENT_TYPE_APPROVAL_REQUIRED = 5;
+  WORKFLOW_EVENT_TYPE_INPUT_REQUIRED = 6;
+  WORKFLOW_EVENT_TYPE_ERROR_OCCURRED = 7;
+  WORKFLOW_EVENT_TYPE_WORKFLOW_COMPLETED = 8;
+  WORKFLOW_EVENT_TYPE_WORKFLOW_STOPPED = 9;
+}
+
+// One ordered event in a workflow stream. PRD 21.
+// Carries a short summary plus a pointer to capped detail.
+// Never carries full logs, transcripts, or source (PRD 29, PRD 37).
+message WorkflowEvent {
+  string event_id = 1;
+  string workflow_id = 2;
+  string provider_session_id = 3;
+  uint64 seq_no = 4;              // Per-workflow monotonic sequence for replay.
+  int64 occurred_at_millis = 5;   // int64 unix millis (UTC), no google types.
+  WorkflowEventType type = 6;
+  string summary = 7;             // One-line human summary for Activity view.
+  string detail_pointer = 8;      // Pointer to capped tail/hunk, fetched on demand.
+}

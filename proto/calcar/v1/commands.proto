@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Workflow commands. PRD 24 (workflow commands), PRD 32 (replay protection:
+// unique ids, reject reuse).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+// Natural-language instruction routed to one workflow. PRD 24.
+message WorkflowCommand {
+  string command_id = 1;        // UUID, dedupe key at the input router.
+  string idempotency_key = 2;   // Client-set key, retried sends reuse it.
+  string workflow_id = 3;
+  string sender_device_id = 4;  // Trusted phone issuing the instruction.
+  string text = 5;              // Instruction body, e.g. "Run the tests."
+  bool requires_confirm = 6;    // True for destructive/high-impact actions (PRD 24).
+  int64 sent_at_millis = 7;     // int64 unix millis (UTC), no google types.
+  bytes nonce = 8;              // Replay protection (PRD 32).
+}
+
+// Transport ack that the command was received, not that it applied. PRD 24.
+message CommandAck {
+  string command_id = 1;
+  string workflow_id = 2;
+  bool accepted = 3;
+  string message = 4;           // Short human note, no terminal content.
+  int64 acked_at_millis = 5;    // int64 unix millis (UTC), no google types.
+}
+
+// Outcome of applying the command to the provider adapter. PRD 24.
+message CommandResult {
+  string command_id = 1;
+  string workflow_id = 2;
+  bool applied = 3;
+  string error = 4;             // Short error, no prompts or source (PRD 37).
+  int64 applied_at_millis = 5;  // int64 unix millis (UTC), no google types.
+}

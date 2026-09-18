@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Workflow model. PRD 20 (workflow model), PRD 22 (supported providers),
+// PRD 40 (reliability: disconnect never completes a workflow).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+// Provider adapter behind the common model. PRD 22.
+// Quirks stay inside adapters (PLAN P1 invariants).
+enum Provider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_OPENCODE = 1;
+  PROVIDER_CLAUDE = 2;
+  PROVIDER_CODEX = 3;
+  PROVIDER_GENERIC = 4; // Scripts, builds, training, Docker. No approvals.
+}
+
+// User-facing workflow lifecycle. PRD 20.
+enum WorkflowState {
+  WORKFLOW_STATE_UNSPECIFIED = 0;
+  WORKFLOW_STATE_RUNNING = 1;
+  WORKFLOW_STATE_WAITING_INPUT = 2;
+  WORKFLOW_STATE_WAITING_APPROVAL = 3;
+  WORKFLOW_STATE_COMPLETED = 4;
+  WORKFLOW_STATE_FAILED = 5;
+  WORKFLOW_STATE_STOPPED = 6;
+  // Projection only, never persisted: phone is disconnected but the
+  // workflow keeps running on the computer (PRD 40, PLAN P4).
+  WORKFLOW_STATE_DISCONNECTED_RUNNING = 7;
+}
+
+// Primary user-facing unit hiding N OS processes. PRD 20.
+message Workflow {
+  string workflow_id = 1;
+  string computer_device_id = 2; // Owning managed computer (routing id only).
+  Provider provider = 3;
+  WorkflowState state = 4;
+  string title = 5;              // Short human title, e.g. "Refactor API layer".
+  string provider_session_id = 6; // Binding to the provider-native session (PRD 23).
+  int64 created_at_millis = 7;   // int64 unix millis (UTC), no google types.
+  int64 updated_at_millis = 8;   // int64 unix millis (UTC), no google types.
+}

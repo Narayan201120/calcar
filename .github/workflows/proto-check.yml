@@ -1,0 +1,35 @@
+name: proto-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  proto-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for breaking check)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Buf lint
+        run: buf lint proto/
+
+      - name: Buf breaking (against main)
+        run: buf breaking proto/ --against '.git#branch=main'
+
+      - name: Buf generate check (if configured)
+        run: |
+          if [ -f buf.gen.yaml ] || [ -f proto/buf.gen.yaml ]; then
+            buf generate proto/
+            git diff --exit-code --stat || (echo "generated output drifted; commit regenerated files" && exit 1)
+          else
+            echo "No buf.gen.yaml found; skipping generate check."
+          fi
+
+      - name: Envelope contract check
+        run: python3 scripts/check-proto.py

@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Device contracts. PRD sections 12-19 (pairing, identity, trust, revocation)
+// and PRD sections 32-33 (security, crypto). DEC-019 (Ed25519/X25519),
+// DEC-020 (local-only Owner), DEC-021 (persistence split).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+// Device role. PRD 11 (backend data model), PRD 17 (trusted phones),
+// PRD 42 (device management).
+enum DeviceType {
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  DEVICE_TYPE_OWNER_PHONE = 1;    // First trusted phone, sole trust authority.
+  DEVICE_TYPE_TRUSTED_PHONE = 2;  // Authorized by Owner, never Owner by default.
+  DEVICE_TYPE_COMPUTER = 3;       // Managed computer, requests trust, never grants.
+}
+
+// Opaque stable identifier. PRD 15 (device identity).
+// A Device ID identifies and routes. It never authenticates (PRD 35).
+message DeviceId {
+  string value = 1; // e.g. "RD-WIN-7F32...". Display and routing only.
+}
+
+// Long-lived device identity. PRD 15 (device identity), PRD 33 (crypto).
+message DeviceIdentity {
+  DeviceId device_id = 1;
+  DeviceType device_type = 2;
+  string display_name = 3; // Human-readable name, e.g. "Narayan-PC".
+  bytes public_key = 4;    // Ed25519 public key bytes (DEC-019). Never a secret.
+  string fingerprint = 5;  // Human-readable key fingerprint shown at approval.
+  int64 created_at_millis = 6; // int64 unix millis (UTC), no google types.
+  string authorized_by_device_id = 7; // Owner device that signed the grant, empty if Owner itself.
+}
+
+// Short-lived single-use phone-created pairing context.
+// PRD 12 (first pairing), PRD 13 (pairing UX). QR carries this session only,
+// never trust (PLAN P1 invariants).
+message PairingSession {
+  string session_id = 1;          // Opaque session reference encoded in QR.
+  string owner_device_id = 2;     // Phone that created the session.
+  int64 created_at_millis = 3;    // int64 unix millis (UTC), no google types.
+  int64 expires_at_millis = 4;    // int64 unix millis (UTC). TTL ~5-10 min (PLAN P2).
+  bool consumed = 5;              // True once approved, rejected, or expired. No reuse.
+}
+
+// Computer join request against a live pairing session.
+// PRD 12 (first pairing), PRD 32 (replay protection).
+message JoinRequest {
+  string request_id = 1;       // Unique id, replay defence, rejected when reused.
+  string session_id = 2;       // Must reference a live pending unconsumed session.
+  DeviceId device_id = 3;      // Claimed id, display only, not proof.
+  bytes device_public_key = 4; // Ed25519 pubkey generated on the computer (PRD 15).
+  string fingerprint = 5;      // Shown on the Owner approve card (PRD 13).
+  string display_name = 6;     // e.g. "Narayan-PC".
+  int64 requested_at_millis = 7; // int64 unix millis (UTC), no google types.
+  bytes nonce = 8;             // Unique nonce for replay protection (PRD 32).
+}
+
+// Durable Owner-signed trust grant. PRD 12 (pairing), PRD 14 (invariant:
+// computer never authorizes a phone), PRD 33 (signed authorization).
+// Binds exact pubkey + session + Owner + context hash.
+message AuthorizationRecord {
+  string authorization_id = 1;
+  string session_id = 2;           // Single-use session this grant consumed.
+  DeviceId subject_device_id = 3;  // Computer being authorized.
+  bytes subject_public_key = 4;    // Must match JoinRequest pubkey exactly.
+  DeviceId owner_device_id = 5;    // Approving Owner Device (DEC-020, local-only).
+  bytes context_hash = 6;          // Hash of authorization context (name, fingerprint, time).
+  bytes owner_signature = 7;       // Ed25519 Owner signature over fields above (DEC-019).
+  int64 decided_at_millis = 8;     // int64 unix millis (UTC), no google types.
+  bytes nonce = 9;                 // Unique nonce, replay protection (PRD 32).
+}
+
+// Durable trust removal. PRD 19 (revocation), PRD 35 (revoked devices rejected).
+message Revocation {
+  string revocation_id = 1;
+  DeviceId subject_device_id = 2;  // Phone or computer losing access.
+  DeviceId revoker_device_id = 3;  // Must be an active Owner Device.
+  string reason = 4;               // Display reason, no sensitive content.
+  int64 revoked_at_millis = 5;     // int64 unix millis (UTC), no google types.
+  bytes owner_signature = 6;       // Ed25519 Owner signature over this record.
+}

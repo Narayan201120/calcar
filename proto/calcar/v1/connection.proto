@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package calcar.v1;
+
+import "calcar/v1/events.proto";
+import "calcar/v1/workflows.proto";
+
+option go_package = "github.com/calcar/calcar/backend/gen/calcar/v1;calcarv1";
+
+// Connection and presence. PRD 9.7 (realtime), PRD 23 (reconnect recovers
+// state), PRD 40 (distinguish inactive workflow from disconnected phone).
+// Presence is TTL-derived: crashes fail to offline, never stuck online
+// (PLAN P3). Backend holds presence ephemerally in Redis (DEC-021).
+// All timestamps are int64 unix millis (UTC). No google.protobuf imports
+// so Dart, Go, and Rust codegen stays dependency-free.
+
+enum PresenceState {
+  PRESENCE_STATE_UNSPECIFIED = 0;
+  PRESENCE_STATE_ONLINE = 1;
+  PRESENCE_STATE_OFFLINE = 2;
+  PRESENCE_STATE_DEGRADED = 3;
+}
+
+// Current reachability of one device. PRD 42 (device list shows state).
+message Presence {
+  string device_id = 1;
+  PresenceState state = 2;
+  int64 last_seen_at_millis = 3; // int64 unix millis (UTC), no google types.
+}
+
+// Lightweight keepalive. No state mutation except presence refresh.
+message Heartbeat {
+  string device_id = 1;
+  int64 sent_at_millis = 2; // int64 unix millis (UTC), no google types.
+  bytes nonce = 3;          // Replay protection (PRD 32).
+}
+
+// Phone ask to resume after a drop. PRD 23, PRD 40.
+message ReconnectRequest {
+  string device_id = 1;
+  uint64 last_seq_no = 2;         // Last event seq no the phone applied per workflow scope.
+  int64 reconnect_at_millis = 3;  // int64 unix millis (UTC), no google types.
+  bytes nonce = 4;                // Replay protection (PRD 32).
+}
+
+// Snapshot plus missed deltas after reconnect. PRD 23 (retrieve current
+// state and relevant history), PRD 40 (never mark completed on disconnect).
+message StateSnapshot {
+  string computer_device_id = 1;
+  int64 snapshot_at_millis = 2; // int64 unix millis (UTC), no google types.
+  uint64 last_seq_no = 3;       // High-water seq no covered by this snapshot.
+  repeated Workflow workflows = 4;       // Current workflow states.
+  repeated WorkflowEvent missed_events = 5; // Ordered deltas after last_seq_no.
+}
