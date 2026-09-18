@@ -326,3 +326,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Deterministic cross language serialization still unproven until Rust and Dart generate.
   - Full gate proof against live endpoints waits for P3.
 - **Status:** Implemented
+
+## DEC-026 P3 backend control plane built
+- **Date/Context:** Sept 18 2026, P3 build, seam owned by main thread plus three workers for stores, API plus WS, deploy plus docs
+- **Context/What:** Built store seam with postgres durable plus redis ephemeral plus combined routing, stdlib HTTP API with challenge tokens and pairing plus trust plus presence plus minimal push plus 501 relay stub, WS hub with heartbeat and bounded buffers, main wiring with boot migrate that blocks start, Dockerfile plus compose plus Caddy plus runbook, CI with unit plus live integration against pg16 and redis7 services.
+- **The "Why":** Gives the control plane its first runnable form so P2 gates can run against real endpoints in CI.
+- **Improvement over Previous Solution:** Replaced harness only trust checks with a full server behind the same gate suite.
+- **Pros:**
+  - Unit layer green locally across api, ws, trust, postgres, redis packages with vet clean.
+  - Redis half proven locally against miniredis including replay expiry and double decide rejection.
+- **Cons & Trade-offs:**
+  - Live postgres plus redis integration runs in CI only; local pg password unknown and scratch clusters cannot spawn here.
+  - Scratch miniredis check was throwaway and removed, not part of the committed suite.
+- **Status:** Implemented

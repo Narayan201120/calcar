@@ -1,0 +1,77 @@
+services:
+  api:
+    build:
+      # Repo-root context: the Go module lives at backend/, so the
+      # Dockerfile runs `go build -o /api ./backend/cmd/calcar-api`.
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      # Dev convenience; production traffic goes through caddy (80/443).
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      PG_DSN: "postgres://calcar:${POSTGRES_PASSWORD:-calcar-dev-only-change-me}@postgres:5432/calcar?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:$${PORT:-8080}/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: calcar
+      POSTGRES_USER: calcar
+      # DEV-ONLY default. Set POSTGRES_PASSWORD in the environment for
+      # anything beyond local dev; never commit a real secret here.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-calcar-dev-only-change-me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calcar -d calcar"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    # AOF on so ephemeral coordination state survives container restarts.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

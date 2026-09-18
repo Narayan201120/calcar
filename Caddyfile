@@ -1,0 +1,36 @@
+# Dev default: plain HTTP on :80, proxied to the compose `api` service.
+#
+# PRODUCTION TLS: replace `:80` below with your domain, e.g.
+#   api.example.com {
+# Caddy then provisions and renews a certificate automatically via ACME.
+# Only add an explicit `tls { ... }` block when you need a DNS challenge,
+# a custom CA, or your own certificates.
+:80 {
+	encode gzip
+
+	# Liveness answered at the edge; the API also serves /healthz itself.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		reverse_proxy api:8080 {
+			header_up Host {host}
+			header_up X-Real-IP {remote}
+			header_up X-Forwarded-For {remote}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# PRODUCTION rate limits: brute-force-sensitive routes need limits
+	# before public exposure, e.g.
+	#   handle /v1/auth/* { ... }
+	#   handle /v1/pairing/* { ... }
+	# Stock Caddy 2 has no built-in rate limiter; add the
+	# caddy-ratelimit plugin (custom build) or a forward_auth gate / edge
+	# WAF here.
+
+	log {
+		format json
+	}
+}

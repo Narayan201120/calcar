@@ -7,6 +7,32 @@ on:
 jobs:
   backend-check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: calcar
+          POSTGRES_USER: calcar
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U calcar -d calcar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_DSN: postgres://calcar:postgres@localhost:5432/calcar?sslmode=disable
+      REDIS_ADDR: localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -15,6 +41,8 @@ jobs:
       - run: go vet ./...
         working-directory: backend
       - run: go test ./...
+        working-directory: backend
+      - run: go test -tags integration ./...
         working-directory: backend
       - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5
       - uses: bufbuild/buf-setup-action@v1
