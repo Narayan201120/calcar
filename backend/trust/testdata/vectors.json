@@ -1,0 +1,22 @@
+{
+  "owner_seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "owner_public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "computer_seed_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "computer_public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+  "computer_fingerprint": "24F6 ED6A CBFE 1009 C030 D7CA 567C 33CA 4830 9114 9823 6B55 61A6 C82A BEC5 DE28",
+  "computer_device_id": "RD-WIN-24F6ED6A",
+  "authorization_record": {
+    "authorization_id": "auth-vector-0001",
+    "session_id": "sess-vector-0001",
+    "subject_device_id": "RD-WIN-24F6ED6A",
+    "subject_public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+    "owner_device_id": "owner-phone-vector-01",
+    "display_name": "Narayan-PC",
+    "requested_at_millis": 1789689300000,
+    "context_hash_hex": "80b689d778bba1d2de74aee5f10034d964ab5c437b3faabdf19a228dd98d8da9",
+    "decided_at_millis": 1789689600000,
+    "nonce_hex": "0102030405060708090a0b0c0d0e0f10",
+    "signing_payload_hex": "0a10617574682d766563746f722d303030311210736573732d766563746f722d303030311a110a0f52442d57494e2d3234463645443641222029acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd72a170a156f776e65722d70686f6e652d766563746f722d3031322080b689d778bba1d2de74aee5f10034d964ab5c437b3faabdf19a228dd98d8da94080b0c08e8b344a100102030405060708090a0b0c0d0e0f10",
+    "owner_signature_hex": "d226b23b9af1c3b33de248961e8929a6bad57b156bef60f48bf1c86fb11587e48a7b848020512bce386b90ca726d47b4bc3aff962df76456382179edb12cfd00"
+  }
+}

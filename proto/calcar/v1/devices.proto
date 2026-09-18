@@ -45,6 +45,7 @@ message PairingSession {
   int64 created_at_millis = 3;    // int64 unix millis (UTC), no google types.
   int64 expires_at_millis = 4;    // int64 unix millis (UTC). TTL ~5-10 min (PLAN P2).
   bool consumed = 5;              // True once approved, rejected, or expired. No reuse.
+  string qr_nonce = 6;            // QR field n, binds the displayed QR to this session.
 }
 
 // Computer join request against a live pairing session.

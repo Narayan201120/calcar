@@ -300,3 +300,29 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Direct pushes to main skip the breaking check by design.
   - Cross language round trip still open until backend, agent, and mobile generate from v1.
 - **Status:** Implemented
+
+## DEC-024 P2 trust choices approved
+- **Date/Context:** Sept 18 2026, P2 discussion, user approved all four recommendations
+- **Context/What:** Owner signs deterministic protobuf bytes of AuthorizationRecord. Transport auth is device key signed challenge plus short lived tokens over TLS, no mTLS yet. Pairing TTL is 10 minutes single use with countdown. Rotation is re-pair only for MVP. P2 exit is frozen spec plus fixed vectors plus conformance harness seeded as first backend tests, with full gates running in P3.
+- **The "Why":** Settles the last open inputs to the trust bootstrap so P2 can produce spec, vectors, and harness without waiting on backend or app code.
+- **Improvement over Previous Solution:** Replaced open crypto and phasing questions with locked answers the harness can test.
+- **Pros:**
+  - One payload form across all three runtimes, no JSON canonicalization risk.
+  - Harness first keeps the P2 and P3 phase line clean.
+- **Cons & Trade-offs:**
+  - Deterministic proto serialization must hold across Dart, Rust, and Go codegen.
+  - Full gate proof waits for P3 real endpoints.
+- **Status:** Implemented
+
+## DEC-025 P2 harness plus spec plus backend CI built
+- **Date/Context:** Sept 18 2026, P2 build, three parallel workers plus main thread merge
+- **Context/What:** Built docs/trust/pairing-spec.md ceremony, backend Go module with generated v1 types plus pure trust package plus 15 conformance tests plus fixed vectors, and backend-check CI with vet plus test plus generate freshness. Merge fixed four worker inconsistencies: added qr_nonce field 6 to PairingSession, renamed module to github.com/calcar/calcar/backend to match go_package, passed --template to buf generate in CI, and read Go version from go.mod instead of a pinned older toolchain.
+- **The "Why":** Gives P2 a frozen spec with an executable harness so P3 endpoints have a gate to run against.
+- **Improvement over Previous Solution:** Replaced spec text alone with spec plus vectors plus green tests plus CI enforcement.
+- **Pros:**
+  - 15 of 15 tests pass covering every P2 gate at unit level, vet clean, structural proto check passes.
+  - No private keys in the trust API except a marked test only signer.
+- **Cons & Trade-offs:**
+  - Deterministic cross language serialization still unproven until Rust and Dart generate.
+  - Full gate proof against live endpoints waits for P3.
+- **Status:** Implemented

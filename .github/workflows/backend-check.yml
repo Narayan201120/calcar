@@ -1,0 +1,22 @@
+name: backend-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - run: go vet ./...
+        working-directory: backend
+      - run: go test ./...
+        working-directory: backend
+      - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf generate --template proto/buf.gen.yaml proto/
+      - run: git diff --exit-code -- backend/gen

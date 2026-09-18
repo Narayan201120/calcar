@@ -1,0 +1,5 @@
+version: v1
+plugins:
+  - name: go
+    out: backend/gen
+    opt: paths=source_relative

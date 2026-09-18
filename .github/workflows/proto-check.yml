@@ -23,14 +23,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: buf breaking proto/ --against '.git#branch=origin/main'
 
-      - name: Buf generate check (if configured)
-        run: |
-          if [ -f buf.gen.yaml ] || [ -f proto/buf.gen.yaml ]; then
-            buf generate proto/
-            git diff --exit-code --stat || (echo "generated output drifted; commit regenerated files" && exit 1)
-          else
-            echo "No buf.gen.yaml found; skipping generate check."
-          fi
+      - name: Buf generate check (owned by backend-check)
+        run: echo "Generate freshness is enforced in backend-check; skipping here."
 
       - name: Envelope contract check
         run: python3 scripts/check-proto.py
