@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -15,8 +16,10 @@ type sessionLatch interface {
 
 // combined routes the seam: durable truth to pg, ephemeral coordination to
 // rd. Pairing methods touch both: Redis enforces live single-use with TTL,
-// Postgres keeps the audit row and the grant. Every partial failure fails
-// closed toward consumed, never toward reusable.
+// Postgres keeps the audit row and the grant. Only terminal outcomes consume
+// the latch: validation rejections and infrastructure errors leave the
+// session pending so the Owner can retry, while every new attempt
+// re-validates from both sides and still fails closed.
 type combined struct {
 	pg Store
 	rd Store
@@ -125,7 +128,10 @@ func (c *combined) DecidePairingSession(ctx context.Context, sessionID string, a
 		}
 	}
 	if err := c.pg.DecidePairingSession(ctx, sessionID, approve, subjectPubKey, granterSig, granterDeviceID); err != nil {
-		if l, ok := c.latch(); ok {
+		// Consume the latch only for terminal outcomes. Validation
+		// rejections (ErrConflict, e.g. pubkey mismatch) and
+		// infrastructure errors leave the session pending for retry.
+		if l, ok := c.latch(); ok && (errors.Is(err, ErrExpired) || errors.Is(err, ErrGone)) {
 			_ = l.MarkPairingConsumed(ctx, sessionID, SessionConsumed)
 		}
 		return err

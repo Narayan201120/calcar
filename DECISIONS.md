@@ -339,3 +339,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Live postgres plus redis integration runs in CI only; local pg password unknown and scratch clusters cannot spawn here.
   - Scratch miniredis check was throwaway and removed, not part of the committed suite.
 - **Status:** Implemented
+
+## DEC-027 Consume pairing latch on terminal outcomes only
+- **Date/Context:** Sept 18 2026, P3 CI red on TestIntegrationPairingWrongPubkey
+- **Context/What:** Combined DecidePairingSession marked Redis consumed on any Postgres decide error. Changed to consume only on success, ErrExpired, or ErrGone. Validation rejections like pubkey mismatch and infrastructure errors leave the session pending for retry.
+- **The "Why":** Burning a session on a fat-fingered Owner decision bricks pairing over a retryable mistake, and consuming on infra errors diverges Redis from the rolled back Postgres row.
+- **Improvement over Previous Solution:** Replaced blanket fail closed toward consumed with terminal only consumption; every retry still re-validates from both sides.
+- **Pros:**
+  - Owner can retry after a mismatch without re-pairing from scratch.
+  - Transient DB blips no longer brick live sessions.
+- **Cons & Trade-offs:**
+  - Slightly more code paths in the combined decide.
+  - Relies on errors.Is chains staying intact through wrappers.
+- **Status:** Implemented
