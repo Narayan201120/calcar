@@ -1,0 +1,26 @@
+[package]
+name = "calcar-agent"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "calcar-agent"
+path = "src/main.rs"
+
+[dependencies]
+calcar-events = { workspace = true }
+calcar-storage = { workspace = true }
+calcar-pty = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+thiserror = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Console",
+    "Win32_System_Pipes",
+    "Win32_System_Memory",
+] }
+winreg = "0.52"

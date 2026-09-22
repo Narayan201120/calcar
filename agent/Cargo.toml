@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/calcar-events",
+    "crates/calcar-storage",
+    "crates/calcar-pty",
+    "crates/calcar-agent",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+calcar-events = { path = "crates/calcar-events" }
+calcar-storage = { path = "crates/calcar-storage" }
+calcar-pty = { path = "crates/calcar-pty" }
+thiserror = "2"
+
+[profile.release]
+lto = "thin"

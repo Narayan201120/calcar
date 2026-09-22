@@ -1,0 +1,10 @@
+[package]
+name = "calcar-storage"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+calcar-events = { workspace = true }
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = { workspace = true }

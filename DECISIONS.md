@@ -327,6 +327,7 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Full gate proof against live endpoints waits for P3.
 - **Status:** Implemented
 
+
 ## DEC-026 P3 backend control plane built
 - **Date/Context:** Sept 18 2026, P3 build, seam owned by main thread plus three workers for stores, API plus WS, deploy plus docs
 - **Context/What:** Built store seam with postgres durable plus redis ephemeral plus combined routing, stdlib HTTP API with challenge tokens and pairing plus trust plus presence plus minimal push plus 501 relay stub, WS hub with heartbeat and bounded buffers, main wiring with boot migrate that blocks start, Dockerfile plus compose plus Caddy plus runbook, CI with unit plus live integration against pg16 and redis7 services.
@@ -351,4 +352,21 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
 - **Cons & Trade-offs:**
   - Slightly more code paths in the combined decide.
   - Relies on errors.Is chains staying intact through wrappers.
+- **Status:** Implemented
+
+## DEC-028 P4 slice 1 agent workspace, storage, doctor
+
+- **Date/Context:** Sept 21 2026, P4 start, first Rust code in the repo
+- **Context/What:** Added `agent/` as a Cargo workspace with four crates. `calcar-events` mirrors proto/calcar/v1 event and workflow enums, with discriminant tests pinning the numbers. `calcar-storage` owns the single SQLite file: WAL, ordered embedded migrations, workflow CRUD with a state machine that refuses unspecified and disconnected states and freezes terminal states, a bounded event ring at 5000 events or 10 MB with a truncation marker, replay by seq, an outbox that drains then marks, session bindings for restart reattach, and pending requests with single resolve plus expiry. `calcar-agent` is the binary and doctor CLI: real ConPTY creation and close, a DPAPI round trip in memory, OS product and build from the registry, SQLite migrate, and ephemeral port bind. `calcar-pty` is a stub for slice 3. Added `agent-check` CI on windows-latest running fmt, clippy with `-D warnings`, and the workspace tests.
+- **The "Why":** The plan orders doctor and storage first so the PTY and lifecycle slices land on a store that survives restarts, and so the P4 gate has runnable preflight checks.
+- **Improvement over Previous Solution:** Replaced no agent code at all with a tested store, a state machine that encodes the disconnect invariant, and a doctor that proves ConPTY and DPAPI instead of assuming them.
+- **Pros:**
+  - 17 tests pass and clippy is clean, doctor exits 0 with all five checks green on this machine.
+  - The doctor found two real bugs while being written: an inverted HRESULT check on CreatePseudoConsole, and a truncation marker that kept the oldest cut instead of the newest.
+  - Event append and outbox enqueue share one transaction, so no event can exist without its publish row, and trim runs in the same transaction.
+- **Cons & Trade-offs:**
+  - `calcar-events` hand mirrors the proto until prost codegen lands with the connection manager. Discriminant tests catch drift, codegen would prevent it.
+  - PTY is still a stub, so the P4 gate is not met yet.
+  - Doctor prints human lines only. A JSON mode for the installer is not written yet.
+  - The doctor OS check reads ProductName from the registry, which still says "Windows 10" on many Windows 11 builds. Build number is the honest signal, noted in the agent README.
 - **Status:** Implemented

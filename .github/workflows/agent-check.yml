@@ -1,0 +1,23 @@
+name: agent-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  agent-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agent
+      - run: cargo fmt --all -- --check
+        working-directory: agent
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: agent
+      - run: cargo test --workspace
+        working-directory: agent
