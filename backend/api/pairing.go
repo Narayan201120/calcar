@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -71,6 +72,9 @@ type joinReq struct {
 	Fingerprint string `json:"fingerprint"`
 	DisplayName string `json:"display_name"`
 	RequestID   string `json:"request_id"`
+	// QRNonce is the `n` field from the scanned QR (spec section 3).
+	// It binds the image to the session record; required.
+	QRNonce string `json:"qr_nonce"`
 }
 
 // handlePairingJoin is the UNAUTHENTICATED computer call. Validates in
@@ -115,6 +119,17 @@ func (s *Server) handlePairingJoin(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.now().After(sess.ExpiresAt) {
 		writeErr(w, http.StatusGone, trust.CodePairingExpired, "session expired", false)
+		return
+	}
+	// QR binding (spec section 3, I3): the join must present the nonce
+	// from the scanned image. Checked before the replay mark so a wrong
+	// nonce burns neither the session nor the request id.
+	if strings.TrimSpace(req.QRNonce) == "" {
+		writeErr(w, http.StatusBadRequest, trust.CodeInvalidInput, "qr_nonce required", false)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(req.QRNonce), []byte(sess.QRNonce)) != 1 {
+		writeErr(w, http.StatusUnprocessableEntity, trust.CodeQRMismatch, "qr nonce does not match this session", false)
 		return
 	}
 	// Body request_id doubles as the idempotency key here (no header on
@@ -298,10 +313,9 @@ func (s *Server) handlePairingDecision(w http.ResponseWriter, r *http.Request) {
 	// Grant persistence is owned by DecidePairingSession (seam contract:
 	// atomically consume the session and record the grant on approve).
 	// The api layer must NOT also call RecordGrant on this path.
-	if derr := s.st.DecidePairingSession(ctx, sessionID, true, subjectPub, sig, me.ID); derr != nil {
-		storeErr(w, derr, trust.CodePairingExpired, trust.CodePairingConsumed)
-		return
-	}
+	// The computer row registers FIRST so the grant lookup by pubkey
+	// finds it: registering after the decide wrote grants with an empty
+	// subject id for brand new computers. Conflict means already known.
 	comp := store.Device{
 		ID:           subjectDeviceID,
 		UserID:       sess.UserID,
@@ -312,9 +326,14 @@ func (s *Server) handlePairingDecision(w http.ResponseWriter, r *http.Request) {
 		AuthorizedBy: me.ID,
 	}
 	if rerr := s.st.RegisterDevice(ctx, comp); rerr != nil && !errors.Is(rerr, store.ErrConflict) {
-		// Session is consumed with the grant recorded; surfacing 500 is
-		// honest, the computer re-pairs only if its row is truly absent.
 		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "computer registration failed", true)
+		return
+	}
+	// A failed decide after a fresh register leaves a row with no grant.
+	// That row confers nothing: trust lives in the grant, and a retry
+	// with the same pubkey passes through the conflict branch above.
+	if derr := s.st.DecidePairingSession(ctx, sessionID, true, subjectPub, sig, me.ID); derr != nil {
+		storeErr(w, derr, trust.CodePairingExpired, trust.CodePairingConsumed)
 		return
 	}
 	s.hub.Notify(ws.Event{UserID: sess.UserID, Type: ws.EventPairingDecided,

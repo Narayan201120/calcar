@@ -52,6 +52,7 @@ const (
 	CodeApprovalExpired  = "APPROVAL_EXPIRED"
 	CodeApprovalResolved = "APPROVAL_RESOLVED"
 	CodeInvalidInput     = "INVALID_INPUT"
+	CodeQRMismatch       = "QR_MISMATCH"
 )
 
 // TrustError is a coded failure. Code is stable for P3 transport mapping.

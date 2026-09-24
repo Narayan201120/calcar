@@ -260,6 +260,7 @@ fail closed with no state change unless noted.
 | Second join or second decision on same session | `PAIRING_CONSUMED` | 410 Gone; first outcome stands; double approve never writes a second grant |
 | Unknown `session_id` | `UNKNOWN_SESSION` | 404; no state change; logged without secrets |
 | Grant pubkey differs from join pubkey, or fingerprint does not derive from pubkey | `PUBKEY_MISMATCH` | 422; no grant written; session stays pending until decided or expired |
+| Join `qr_nonce` missing or different from the session record | `QR_MISMATCH` / `INVALID_INPUT` | Missing: 400. Mismatch: 422; neither burns the session nor the request id; retry with the scanned QR |
 | Subject or approver revoked, or approver is not the active Owner | `REVOKED` / `NOT_OWNER` | 401 or 403; token refused; WebSocket refused; computer caller attempting grant or revoke gets 403 |
 | Reused `request_id`, `message_id`, or `nonce`; timestamp outside skew; message past its own expiry | `REPLAYED_ID` | 409; effect applied at most once; duplicate resolve of an approval reports superseded or expired |
 

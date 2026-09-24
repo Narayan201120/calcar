@@ -387,3 +387,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - P4 pivots to provable work now: storage, events, doctor, workflow managers on plain pipes. ConPTY gate waits on a healthy box or admin repair outside this session.
   - P3 carryovers untouched: grant ordering with empty subject id at `backend/api/pairing.go:301-319` plus `backend/store/postgres/postgres.go:360-369`, QR nonce never validated on join or decision.
 - **Status:** Implemented
+
+## DEC-030 pairing trust patches, grant order plus QR binding
+- **Date/Context:** Sept 24 2026, P3 follow-ups surfaced by the P4 audit, fixed first as small isolated backend work
+- **Context/What:** Two changes, both in `backend/api/pairing.go`, seam untouched. Approve registers the computer row before `DecidePairingSession` so the grant lookup finds it, conflict tolerated for known devices. Join requires `qr_nonce` from the scanned QR and compares it against the session record before the replay mark, missing is 400, mismatch is 422 with new stable code `QR_MISMATCH` plus a spec error table row.
+- **The "Why":** New computers got grants pointing at an empty subject id, and any session id guesser could join without ever seeing the QR image. Both broke spec intent, I3 plus section 3.
+- **Improvement over Previous Solution:** Replaced decide-then-register with register-then-decide, and a nonce field that traveled in QR and storage but was never checked with one that fails the join.
+- **Pros:**
+  - Tests first, all three red before the fix, green after, full unit suite plus vet plus fmt clean locally.
+  - Wrong nonce burns nothing: session stays pending, request id unmarked, real QR still joins.
+  - A failed decide after a fresh register leaves a row with no grant, which confers no trust.
+- **Cons & Trade-offs:**
+  - Live Postgres plus Redis integration runs in CI only here, same as P3. Integration files compile under the tag locally.
+  - Old phone builds must send the new field; missing nonce is a hard 400, no compat shim for MVP.
+- **Status:** Implemented

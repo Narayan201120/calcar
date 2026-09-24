@@ -34,7 +34,12 @@ type fakeStore struct {
 	tokens     map[string]tokRec
 	presence   map[string]store.Presence
 	seen       map[string]time.Time
+	calls      []string
 	FailPing   bool
+}
+
+func (f *fakeStore) noteCall(c string) {
+	f.calls = append(f.calls, c)
 }
 
 type challRec struct {
@@ -73,6 +78,7 @@ func (f *fakeStore) CreateUser(_ context.Context) (string, error) {
 func (f *fakeStore) RegisterDevice(_ context.Context, d store.Device) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.noteCall("register:" + d.ID)
 	if _, dup := f.devices[d.ID]; dup {
 		return store.ErrConflict
 	}
@@ -170,6 +176,7 @@ func (f *fakeStore) SubmitJoinRequest(_ context.Context, sessionID string, pubKe
 func (f *fakeStore) DecidePairingSession(_ context.Context, sessionID string, approve bool, subjectPubKey, _ []byte, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.noteCall("decide:" + sessionID)
 	s, ok := f.sessions[sessionID]
 	if !ok {
 		return store.ErrNotFound
@@ -386,7 +393,7 @@ func createSession(t *testing.T, srv *Server, token string) map[string]any {
 	return decodeBody(t, rec)
 }
 
-func joinSession(t *testing.T, srv *Server, sessionID string, pub ed25519.PublicKey, name string) (string, string) {
+func joinSession(t *testing.T, srv *Server, sessionID, nonce string, pub ed25519.PublicKey, name string) (string, string) {
 	t.Helper()
 	fp, err := trust.FingerprintEd25519Pub(pub)
 	if err != nil {
@@ -394,7 +401,7 @@ func joinSession(t *testing.T, srv *Server, sessionID string, pub ed25519.Public
 	}
 	rec := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sessionID+"/join-request", map[string]any{
 		"pubkey_b64": b64(pub), "fingerprint": fp,
-		"display_name": name, "request_id": freshRID(),
+		"display_name": name, "request_id": freshRID(), "qr_nonce": nonce,
 	}, "", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("join = %d %s", rec.Code, rec.Body.String())
@@ -471,7 +478,7 @@ func TestPairingHappyPath(t *testing.T) {
 	}
 
 	compPub, compPriv := newKeypair(t)
-	joinFP, joinName := joinSession(t, srv, sessionID, compPub, "DESK-01")
+	joinFP, joinName := joinSession(t, srv, sessionID, sess["qr_nonce"].(string), compPub, "DESK-01")
 
 	dec := ownerApprove(t, srv, ownerTok, sessionID, ownerID, ownerPriv, compPub, joinName, joinFP)
 	if dec.Code != http.StatusOK {
@@ -523,7 +530,7 @@ func TestPairingHappyPath(t *testing.T) {
 	sess2 := createSession(t, srv, ownerTok)
 	sid2 := sess2["session_id"].(string)
 	p2, _ := newKeypair(t)
-	joinSession(t, srv, sid2, p2, "DESK-02")
+	joinSession(t, srv, sid2, sess2["qr_nonce"].(string), p2, "DESK-02")
 	rec = doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid2+"/decision", map[string]any{
 		"approve": false, "subject_pubkey_b64": b64(p2),
 	}, ownerTok, freshRID())
@@ -569,6 +576,85 @@ func TestPairingJoinUnknown404(t *testing.T) {
 	}
 }
 
+func TestPairingJoinWrongNonce422(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	tok := authtoken(t, srv, ownerID, ownerPriv)
+	sess := createSession(t, srv, tok)
+	sid := sess["session_id"].(string)
+	pub, _ := newKeypair(t)
+	fp, _ := trust.FingerprintEd25519Pub(pub)
+	rec := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid+"/join-request", map[string]any{
+		"pubkey_b64": b64(pub), "fingerprint": fp,
+		"display_name": "PC", "request_id": freshRID(), "qr_nonce": "wrong-nonce",
+	}, "", "")
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("wrong nonce join = %d, want 422", rec.Code)
+	}
+	if decodeBody(t, rec)["error"] != trust.CodeQRMismatch {
+		t.Fatalf("wrong nonce code = %s", rec.Body.String())
+	}
+	// Wrong nonce burns nothing: the real QR still joins.
+	joinSession(t, srv, sid, sess["qr_nonce"].(string), pub, "PC")
+}
+
+func TestPairingJoinMissingNonce400(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	tok := authtoken(t, srv, ownerID, ownerPriv)
+	sess := createSession(t, srv, tok)
+	sid := sess["session_id"].(string)
+	pub, _ := newKeypair(t)
+	fp, _ := trust.FingerprintEd25519Pub(pub)
+	rec := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid+"/join-request", map[string]any{
+		"pubkey_b64": b64(pub), "fingerprint": fp,
+		"display_name": "PC", "request_id": freshRID(),
+	}, "", "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing nonce join = %d, want 400", rec.Code)
+	}
+	if decodeBody(t, rec)["error"] != trust.CodeInvalidInput {
+		t.Fatalf("missing nonce code = %s", rec.Body.String())
+	}
+}
+
+func TestApproveRegistersBeforeDecide(t *testing.T) {
+	srv, f := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	tok := authtoken(t, srv, ownerID, ownerPriv)
+	sess := createSession(t, srv, tok)
+	sid := sess["session_id"].(string)
+	cp, _ := newKeypair(t)
+	fp, name := joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
+	if dec := ownerApprove(t, srv, tok, sid, ownerID, ownerPriv, cp, name, fp); dec.Code != http.StatusOK {
+		t.Fatalf("approve = %d %s", dec.Code, dec.Body.String())
+	}
+	subjectID, _ := trust.DeviceIDForComputer(cp)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	regIdx, decIdx := -1, -1
+	for i, c := range f.calls {
+		if c == "register:"+subjectID {
+			regIdx = i
+		}
+		if c == "decide:"+sid {
+			decIdx = i
+		}
+	}
+	if regIdx < 0 {
+		t.Fatalf("computer was never registered, calls = %v", f.calls)
+	}
+	if decIdx < 0 {
+		t.Fatalf("session was never decided, calls = %v", f.calls)
+	}
+	if regIdx > decIdx {
+		t.Fatalf("register ran after decide: calls = %v", f.calls)
+	}
+	if _, ok := f.devices[subjectID]; !ok {
+		t.Fatalf("computer row missing after approve")
+	}
+}
+
 func TestPairingDoubleDecide410(t *testing.T) {
 	srv, _ := newTestServer()
 	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
@@ -576,7 +662,7 @@ func TestPairingDoubleDecide410(t *testing.T) {
 	sess := createSession(t, srv, tok)
 	sid := sess["session_id"].(string)
 	cp, _ := newKeypair(t)
-	fp, name := joinSession(t, srv, sid, cp, "PC")
+	fp, name := joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
 	if dec := ownerApprove(t, srv, tok, sid, ownerID, ownerPriv, cp, name, fp); dec.Code != http.StatusOK {
 		t.Fatalf("first decide = %d %s", dec.Code, dec.Body.String())
 	}
@@ -596,7 +682,7 @@ func TestDecisionWrongPubkey422(t *testing.T) {
 	sess := createSession(t, srv, tok)
 	sid := sess["session_id"].(string)
 	cp, _ := newKeypair(t)
-	joinSession(t, srv, sid, cp, "PC")
+	joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
 	other, _ := newKeypair(t)
 	rec := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid+"/decision", map[string]any{
 		"approve": true, "subject_pubkey_b64": b64(other),
@@ -623,7 +709,7 @@ func TestComputerDecision403(t *testing.T) {
 	sess := createSession(t, srv, ownerTok)
 	sid := sess["session_id"].(string)
 	cp, cpPriv := newKeypair(t)
-	fp, name := joinSession(t, srv, sid, cp, "PC")
+	fp, name := joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
 	if dec := ownerApprove(t, srv, ownerTok, sid, ownerID, ownerPriv, cp, name, fp); dec.Code != http.StatusOK {
 		t.Fatalf("approve = %d", dec.Code)
 	}
@@ -633,7 +719,7 @@ func TestComputerDecision403(t *testing.T) {
 	sess2 := createSession(t, srv, ownerTok)
 	sid2 := sess2["session_id"].(string)
 	p2, _ := newKeypair(t)
-	joinSession(t, srv, sid2, p2, "PC2")
+	joinSession(t, srv, sid2, sess2["qr_nonce"].(string), p2, "PC2")
 	rec := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid2+"/decision", map[string]any{
 		"approve": false, "subject_pubkey_b64": b64(p2),
 	}, compTok, freshRID())
@@ -649,7 +735,7 @@ func TestComputerRevoke403(t *testing.T) {
 	sess := createSession(t, srv, ownerTok)
 	sid := sess["session_id"].(string)
 	cp, cpPriv := newKeypair(t)
-	fp, name := joinSession(t, srv, sid, cp, "PC")
+	fp, name := joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
 	if dec := ownerApprove(t, srv, ownerTok, sid, ownerID, ownerPriv, cp, name, fp); dec.Code != http.StatusOK {
 		t.Fatalf("approve = %d", dec.Code)
 	}
@@ -668,7 +754,7 @@ func TestRevokedDevice401(t *testing.T) {
 	sess := createSession(t, srv, ownerTok)
 	sid := sess["session_id"].(string)
 	cp, cpPriv := newKeypair(t)
-	fp, name := joinSession(t, srv, sid, cp, "PC")
+	fp, name := joinSession(t, srv, sid, sess["qr_nonce"].(string), cp, "PC")
 	if dec := ownerApprove(t, srv, ownerTok, sid, ownerID, ownerPriv, cp, name, fp); dec.Code != http.StatusOK {
 		t.Fatalf("approve = %d", dec.Code)
 	}
