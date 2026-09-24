@@ -370,3 +370,20 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Doctor prints human lines only. A JSON mode for the installer is not written yet.
   - The doctor OS check reads ProductName from the registry, which still says "Windows 10" on many Windows 11 builds. Build number is the honest signal, noted in the agent README.
 - **Status:** Implemented
+
+## DEC-029 P4 PTY triage, rewrite, box-level ConPTY silence
+- **Date/Context:** Sept 24 2026, P4 slice 3 triage plus rewrite, three parallel workers for code, cleanup, decision text, main thread ran diagnosis plus E2E
+- **Context/What:** Rewrote `Inner::spawn` at `agent/crates/calcar-pty/src/lib.rs:237` into one straight EchoCon-shaped unsafe block with explicit closes on every error path, no RAII guards, no forget calls. Kept console pipe ends in `Inner` at `:215-234`, `OwnedHandle::close` at `:169`, drop order terminate plus close console plus close console ends plus join pump at `:537-555`, pump at `:559`, match-based empty argv test at `:665`, full suite at `:648`. Regenerated lock for `windows-sys` 0.59, formatted, clippy clean with deny warnings. Added repeatable gate script `scripts/e2e-pty.ps1` with log at `target/e2e-pty/e2e-pty.log`.
+- **The "Why":** Slice 3 must prove one PTY per workflow, job tree kill, bounded backpressure, blocked idle reads before lifecycle lands on it. Triage cleared every build, ownership, and shutdown blocker first so the remaining red is one load-bearing fact, not noise.
+- **Improvement over Previous Solution:** Replaced the slice-1 stub plus the Cline draft, extra brace, `ConPty` wrapper dance, dead drop join order, swallowed kill result, swallowed mut lint, with a shape a reviewer can trace top to bottom.
+- **Pros:**
+  - `cargo check`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all -- --check` all exit zero locally.
+  - Throwaway probes deleted, scratch scripts deleted, no temps left in tree.
+  - E2E pins tree kill, 2000-line backpressure, 90 s drop watchdog, leak sweep in one rerunnable log.
+- **Cons & Trade-offs:**
+  - E2E red: 2 logic tests pass, 4 ConPTY tests fail with zero pipe bytes. Children exit zero, so attach works. Bytes never flow.
+  - Two independent stacks agree: Rust `windows-sys` 0.59 and Python `ctypes` both get silent pipes on this box. Prime suspect is `conhost` 26100 against OS 26220 Beta flight. No log signal, no published regression, so suspect only.
+  - Falsified along the way: job objects, env block, pump, pipe lifetime, `cmd.exe`, cargo, parent image, struct layout, flags, cwd, binding signatures, timing, observation. Each died by experiment, listed here so nobody re-runs them.
+  - P4 pivots to provable work now: storage, events, doctor, workflow managers on plain pipes. ConPTY gate waits on a healthy box or admin repair outside this session.
+  - P3 carryovers untouched: grant ordering with empty subject id at `backend/api/pairing.go:301-319` plus `backend/store/postgres/postgres.go:360-369`, QR nonce never validated on join or decision.
+- **Status:** Implemented

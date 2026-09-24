@@ -92,6 +92,7 @@ name = "calcar-pty"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
