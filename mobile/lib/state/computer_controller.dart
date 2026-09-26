@@ -39,6 +39,17 @@ class ComputerController extends StateNotifier<ComputerState> {
 
   bool get snapshotLoaded => state.snapshot != null;
 
+  /// Adopts a snapshot already fetched over the authed channel, for
+  /// example by a push tap. Ignored when a snapshot is loaded or when it
+  /// addresses another computer, so a late prefetch never overwrites
+  /// fresher state.
+  void seed(ComputerSnapshot snap) {
+    if (snapshotLoaded || snap.deviceId != computerId) {
+      return;
+    }
+    state = ComputerState(snapshot: snap, loading: false);
+  }
+
   /// One snapshot fetch for this computer. Rejects snapshots addressed
   /// to another computer instead of mixing rows across machines.
   Future<bool> refresh() async {

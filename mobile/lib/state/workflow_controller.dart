@@ -59,6 +59,20 @@ class WorkflowController extends StateNotifier<WorkflowBuffers> {
     _frozen = frozen;
   }
 
+  /// Adopts buffers already fetched over the authed channel, for example
+  /// by a push tap. Ignored when a snapshot is already loaded or when the
+  /// buffers address another workflow, so a late prefetch can never
+  /// overwrite fresher state. Unfreezes: the prefetch is current data.
+  void seed(WorkflowBuffers snap) {
+    if (_snapshotLoaded || snap.workflowId != workflowId) {
+      return;
+    }
+    _snapshotLoaded = true;
+    _frozen = false;
+    _loadError = '';
+    state = snap.capped();
+  }
+
   bool _accept(int seqNo) {
     if (!_snapshotLoaded || _frozen) {
       return false;

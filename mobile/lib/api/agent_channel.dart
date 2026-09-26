@@ -24,6 +24,7 @@ class AgentCodes {
   static const String workflowUnknown = 'WORKFLOW_UNKNOWN';
   static const String truncated = 'TRUNCATED';
   static const String truncatedNotice = 'TRUNCATED_NOTICE';
+  static const String malformed = 'MALFORMED';
 }
 
 /// Failure from the agent channel. [code] is the agent's stable code, not
@@ -93,41 +94,28 @@ class AgentChannelClient {
   }
 
   Map<String, dynamic> _decodeMap(http.Response res) {
-    final Object? body = jsonDecode(utf8.decode(res.bodyBytes));
+    Object? body;
+    try {
+      body = jsonDecode(utf8.decode(res.bodyBytes));
+    } on FormatException {
+      // A proxy error page or an HTML body must not escape as a raw
+      // FormatException. The stable agent code is what callers branch on.
+      throw const AgentException(
+        status: 500,
+        code: AgentCodes.malformed,
+        message: 'agent replied with a non-JSON body',
+        retryable: true,
+      );
+    }
     if (body is! Map<String, dynamic>) {
       throw const AgentException(
         status: 500,
-        code: 'MALFORMED',
+        code: AgentCodes.malformed,
         message: 'agent replied with a non-object body',
         retryable: false,
       );
     }
     return body;
-  }
-
-  /// GET /v1/agent/devices: the managed computers with workflow counts.
-  List<WorkflowRow> fetchComputerRows(String userId) {
-    final http.Response res = _http.get(
-      _uri('/v1/agent/devices?user_id=$userId'),
-      headers: _headers(),
-    );
-    return _decode(res, (Map<String, dynamic> j) {
-      final Object? rows = j['workflows'];
-      if (rows is! List) {
-        return <WorkflowRow>[];
-      }
-      return rows
-          .whereType<Map<String, dynamic>>()
-          .map(
-            (Map<String, dynamic> r) => WorkflowRow(
-              workflowId: (r['workflow_id'] ?? '').toString(),
-              computerId: (r['computer_id'] ?? '').toString(),
-              title: (r['title'] ?? '').toString(),
-              status: (r['status'] ?? '').toString(),
-            ),
-          )
-          .toList();
-    });
   }
 
   /// GET /v1/agent/computers/{id}: header plus sysinfo on demand.
@@ -137,25 +125,33 @@ class AgentChannelClient {
       headers: _headers(),
     );
     return _decode(res, (Map<String, dynamic> j) {
+      final List<WorkflowRow> rows = <WorkflowRow>[];
       final Object? raw = j['workflows'];
-      final List<Map<String, dynamic>> rows = raw is List
-          ? raw.whereType<Map<String, dynamic>>().toList()
-          : <Map<String, dynamic>>[];
+      if (raw is List) {
+        for (final Map<String, dynamic> r
+            in raw.whereType<Map<String, dynamic>>()) {
+          final String workflowId = (r['workflow_id'] ?? '').toString();
+          if (workflowId.isEmpty) {
+            // A row with no id cannot be addressed, so it is dropped,
+            // not blanked. The same rule _buffersFrom applies.
+            continue;
+          }
+          rows.add(
+            WorkflowRow(
+              workflowId: workflowId,
+              computerId: (r['computer_id'] ?? computerId).toString(),
+              title: (r['title'] ?? '').toString(),
+              status: (r['status'] ?? '').toString(),
+            ),
+          );
+        }
+      }
       return ComputerSnapshot(
         deviceId: (j['device_id'] ?? computerId).toString(),
         displayName: (j['display_name'] ?? '').toString(),
         online: j['online'] == true,
         lastSeenMillis: (j['last_seen_millis'] as num?)?.toInt() ?? 0,
-        workflows: rows
-            .map(
-              (Map<String, dynamic> r) => WorkflowRow(
-                workflowId: (r['workflow_id'] ?? '').toString(),
-                computerId: (r['computer_id'] ?? '').toString(),
-              title: (r['title'] ?? '').toString(),
-              status: (r['status'] ?? '').toString(),
-            ),
-          )
-            .toList(),
+        workflows: rows,
       );
     });
   }
