@@ -445,3 +445,14 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Live 60 second drop still waits on the connection manager. Router redelivery dedupe is pinned, the uplink half is not.
   - Merge added `Default` impls for the four adapters to satisfy deny-warnings clippy.
 - **Status:** Implemented
+
+## DEC-034 P6 slice 1 mobile scaffold, CI-proven
+- **Date/Context:** Sept 26 2026, P6 start with no Flutter or Dart SDK on the box
+- **Context/What:** Scaffold only: `mobile/pubspec.yaml` with riverpod plus http plus websocket channel, `lib/main.dart`, one computers screen with the empty state, one widget test, README stating CI is the verifier, new `mobile-check` workflow running pub get plus analyze plus test on stable Flutter.
+- **The "Why":** Nothing mobile compiles here, so slices stay tiny and every one goes green in CI before the next lands. Proto Dart models generate in CI from slice 2, never hand-copied.
+- **Pros:**
+  - Smallest reviewable start with a real gate behind it.
+- **Cons & Trade-offs:**
+  - Blind Dart until CI reports. Iteration is push plus wait.
+  - Goldens deferred: widget tests now, pinned-font goldens once screens stabilize.
+- **Status:** Implemented
