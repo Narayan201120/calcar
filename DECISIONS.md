@@ -401,3 +401,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Live Postgres plus Redis integration runs in CI only here, same as P3. Integration files compile under the tag locally.
   - Old phone builds must send the new field; missing nonce is a hard 400, no compat shim for MVP.
 - **Status:** Implemented
+
+## DEC-031 ConPTY failure is box-level, proven by known-good control
+- **Date/Context:** Sept 26 2026, continued P4 slice 3 diagnosis with parallel probes plus a third-party control
+- **Context/What:** `portable-pty` 0.9, battle-tested ConPTY code, spawned the same `cmd` child on this box and died the identical death: exit 3221225794 with zero pipe bytes. Our Rust sequence, a Python `ctypes` build, this laptop, and the CI Windows runner all agree. Parentage work showed our headless session host alive with our exact dims while the child kept a classic auto console, and a dims probe showed the child never sees our session.
+- **The "Why":** This ends the bytes hunt. No hand-rolled sequence detail explains a known-good library failing byte-identically. The ConPTY session path on these boxes does not deliver, period.
+- **Improvement over Previous Solution:** Replaced a growing pile of single-run theories with one control experiment that falsifies all of them at once.
+- **Pros:**
+  - Tree is clean: all temps reverted, throwaway probes deleted, dev-dep removed, lockfile restored, fmt plus clippy green.
+  - The raw-era `C0000142` deaths were a separate bytes gremlin in deleted throwaway code. Current lib children exit zero. Do not conflate the two.
+- **Cons & Trade-offs:**
+  - `agent-check` stays red on the 4 ConPTY tests here and in CI until a healthy box runs them. That red is now a tripwire, not a task.
+  - P4 pivots to plain pipe execution plus workflow managers, the provable half. ConPTY waits on box repair or a second machine.
+  - The dev-dep add plus remove churned the lockfile mid-session; final tree shows no diff there, verified.
+- **Status:** Implemented
