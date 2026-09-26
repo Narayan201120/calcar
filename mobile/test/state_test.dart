@@ -301,15 +301,13 @@ void main() {
       addTearDown(binding.dispose);
       binding.mount();
       binding.handleEvent(
-        PresenceChanged(
-          msgId: 'm-bad',
+        const PresenceChanged(          msgId: 'm-bad',
           to: 'user:u1',
           payload: <String, dynamic>{'online': true},
         ),
       );
       binding.handleEvent(
-        PresenceChanged(
-          msgId: 'm-bad2',
+        const PresenceChanged(          msgId: 'm-bad2',
           to: 'user:u1',
           payload: <String, dynamic>{
             'device_id': 'PC-1',
@@ -318,8 +316,7 @@ void main() {
         ),
       );
       binding.handleEvent(
-        AttentionPending(
-          msgId: 'm-bad3',
+        const AttentionPending(          msgId: 'm-bad3',
           to: 'user:u1',
           payload: <String, dynamic>{'kind': 'approval_required'},
         ),
@@ -351,8 +348,7 @@ void main() {
         binding.mount();
         expect(binding.isMounted, isTrue);
         binding.handleEvent(
-          PresenceChanged(
-            msgId: 'm-1',
+          const PresenceChanged(            msgId: 'm-1',
             to: 'user:u1',
             payload: <String, dynamic>{
               'device_id': 'PC-1',
@@ -366,8 +362,7 @@ void main() {
         expect(socket.isMounted, isFalse);
         // Post-dispose events are dropped and dispose stays idempotent.
         binding.handleEvent(
-          PresenceChanged(
-            msgId: 'm-2',
+          const PresenceChanged(            msgId: 'm-2',
             to: 'user:u1',
             payload: <String, dynamic>{
               'device_id': 'PC-2',

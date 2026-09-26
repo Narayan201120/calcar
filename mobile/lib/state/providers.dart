@@ -25,6 +25,7 @@ import 'devices_controller.dart';
 import 'models.dart';
 import 'realtime_binding.dart';
 import 'snapshot_source.dart';
+import 'workflow_controller.dart';
 
 /// Overridden by the merge step with the HTTP snapshot source.
 final snapshotSourceProvider = Provider<SnapshotSource>(
