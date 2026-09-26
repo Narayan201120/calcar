@@ -456,3 +456,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Blind Dart until CI reports. Iteration is push plus wait.
   - Goldens deferred: widget tests now, pinned-font goldens once screens stabilize.
 - **Status:** Implemented
+
+## DEC-035 P6 slice 2 clients plus CI codegen green
+- **Date/Context:** Sept 26 2026, three parallel workers plus merge, proof in CI only since no local SDK exists
+- **Context/What:** `mobile-check` generates Dart protobuf models in CI with pinned protoc 36.2 plus floated plugin into git-ignored `lib/gen`, then runs pub get plus analyze plus test. Typed HTTP client over exact backend JSON shapes with spec error codes. Socket client with envelope parsing, heartbeat drop after 3 missed, bounded buffer, backoff while mounted. Tests: 15 API plus 18 socket plus 1 widget, all passing in CI.
+- **The "Why":** Screens in slice 3 build on a proven client layer instead of scaffolding plus hope.
+- **Improvement over Previous Solution:** Replaced an empty app with the full transport layer the UI needs.
+- **Pros:**
+  - Contract held across workers with zero rework at merge.
+  - CI caught real issues twice: plugin 25 output needs protobuf 6 not 4, plus a `num` to `double` assignment. Both fixed, both green.
+- **Cons & Trade-offs:**
+  - Generated code excluded from analysis, and models never land in the tree. Drift check waits on a local SDK.
+  - One backend red along the way was pure infra, rate-limited tool download, green on rerun.
+- **Status:** Implemented
