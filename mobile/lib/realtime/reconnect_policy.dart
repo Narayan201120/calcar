@@ -35,8 +35,7 @@ class ReconnectPolicy {
 
   /// Next retry delay. Each call consumes one attempt.
   Duration nextDelay() {
-    final double grown =
-        initialDelay.inMilliseconds * math.pow(multiplier, _attempts);
+    final double grown = (initialDelay.inMilliseconds * math.pow(multiplier, _attempts)).toDouble();
     _attempts += 1;
     if (grown >= maxDelay.inMilliseconds) {
       return maxDelay;

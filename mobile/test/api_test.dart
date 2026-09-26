@@ -1,6 +1,8 @@
 /// API client contract tests. Canned JSON maps only, no network:
 /// every backend reply comes from an in-memory MockClient.
 /// Each test names the contract it guards.
+library;
+
 import 'dart:convert';
 
 import 'package:calcar/api/api.dart';
