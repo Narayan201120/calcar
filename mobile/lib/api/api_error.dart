@@ -3,6 +3,8 @@
 /// Mirrors `backend/trust` (`Code*`) plus the pairing spec section 12 error
 /// table. The `error` string in the JSON body is the contract; HTTP status
 /// is transport only. Unknown codes are preserved verbatim, never remapped.
+library;
+
 class ApiCodes {
   static const String pairingExpired = 'PAIRING_EXPIRED';
   static const String pairingConsumed = 'PAIRING_CONSUMED';

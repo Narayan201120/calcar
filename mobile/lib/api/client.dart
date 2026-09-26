@@ -3,6 +3,8 @@
 /// Thin transport only: bearer token holder, exact backend JSON shapes,
 /// stable spec error codes via [ApiException]. No provider logic, no state
 /// management, no caching. One class plus pure body builders.
+library;
+
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -14,26 +16,21 @@ import 'request_bodies.dart';
 class CalcarApiClient {
   final String baseUrl;
   final http.Client _http;
-  String? _token;
+
+  /// Current bearer token, null when logged out.
+  String? token;
 
   CalcarApiClient({
     required String baseUrl,
     http.Client? httpClient,
-    String? token,
+    this.token,
   })  : baseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl,
-        _http = httpClient ?? http.Client(),
-        _token = token;
-
-  /// Current bearer token, null when logged out.
-  String? get token => _token;
-
-  /// Replaces the bearer token (for example after [verify]).
-  set token(String? value) => _token = value;
+        _http = httpClient ?? http.Client();
 
   /// Drops the bearer token without any network call.
-  void clearToken() => _token = null;
+  void clearToken() => token = null;
 
   // ---- auth ----
 
@@ -69,9 +66,9 @@ class CalcarApiClient {
         ),
       ),
     );
-    final TokenResponse token = TokenResponse.fromJson(body);
-    _token = token.accessToken;
-    return token;
+    final TokenResponse resp = TokenResponse.fromJson(body);
+    token = resp.accessToken;
+    return resp;
   }
 
   /// POST /v1/users/bootstrap. Needs `X-Request-ID`, no token yet.
@@ -301,8 +298,8 @@ class CalcarApiClient {
     final Map<String, String> headers = <String, String>{
       'Content-Type': 'application/json',
     };
-    if (_token != null && _token!.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $_token';
+    if (token != null && token!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
     }
     if (requestId != null) {
       headers['X-Request-ID'] = requestId;

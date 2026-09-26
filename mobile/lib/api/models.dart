@@ -1,6 +1,8 @@
 /// Typed views over backend JSON. Field names mirror the backend exactly
 /// (snake_case); parsing is defensive about missing optional keys but never
 /// renames a wire field.
+library;
+
 class Device {
   final String deviceId;
   final String role;

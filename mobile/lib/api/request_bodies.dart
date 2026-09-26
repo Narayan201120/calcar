@@ -1,5 +1,6 @@
 /// Pure request-body builders. JSON keys mirror `backend/api` exactly.
 /// No I/O, no state: covered by unit tests against the backend shapes.
+library;
 
 /// POST /v1/pairing/sessions/{id}/join-request (unauthenticated).
 Map<String, dynamic> buildJoinBody({
