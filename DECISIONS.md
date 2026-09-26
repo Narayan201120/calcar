@@ -429,3 +429,19 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Live 60 second network drop still needs the connection manager from P5/P7; the router side, same UUID redelivery deduplicated with payload once, is what the E2E pins today.
   - Merge friction was real: one worker assumed module lines another never wrote, and my runner misread `i32` state as variant names. Both caught by compile plus E2E, not review.
 - **Status:** Implemented
+
+## DEC-033 P5 adapter trait plus providers green
+- **Date/Context:** Sept 26 2026, P5 built with architect plus type discipline up front, three parallel implementers, main-thread merge and E2E
+- **Context/What:** New `calcar-adapters` crate. `traitdef.rs` freezes the contract: capabilities flags, provider events without ids, approval decision plus outcome sums, exhaustive adapter errors, spawn request with an interactive flag that reports Unsupported until the ConPTY gate greens. `registry.rs` dispatches an exhaustive `Adapter` enum so a new provider breaks compilation loudly. `generic.rs` runs scripts over plain pipes. `opencode.rs`, `claude.rs`, `codex.rs` spawn their CLIs over plain pipes with documented marker grammars and fixture-shaped parsing. `permission.rs` owns approval expiry plus single use plus device binding against storage approval rows. E2E grew to 60 PASS lines in the same script log.
+- **The "Why":** Provider quirks now live in exactly one folder each. Core sees common events only, and the next provider is one file plus one variant.
+- **Improvement over Previous Solution:** Replaced no adapter layer with a trait the compiler enforces and three CLI backends proven against live processes.
+- **Pros:**
+  - Contract held across all three workers with zero rework: first merged compile passed.
+  - Live stdin correctly refused as Unsupported on plain pipes instead of faked. Prompts travel at spawn, which is all three CLIs need.
+  - Device bindings fail closed to Unknown on restart, documented, since storage has no device column. No migration smuggled into P5 for it.
+  - No unit tests added; the script log stays the artifact.
+- **Cons & Trade-offs:**
+  - The CLIs themselves are absent here, so provider runs prove the harness path with canned marker streams through real processes, not real CLI output. First run against real CLIs must re-prove parsing.
+  - Live 60 second drop still waits on the connection manager. Router redelivery dedupe is pinned, the uplink half is not.
+  - Merge added `Default` impls for the four adapters to satisfy deny-warnings clippy.
+- **Status:** Implemented

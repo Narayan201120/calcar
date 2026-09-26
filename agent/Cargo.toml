@@ -6,6 +6,7 @@ members = [
     "crates/calcar-pty",
     "crates/calcar-agent",
     "crates/calcar-workflow",
+    "crates/calcar-adapters",
 ]
 
 [workspace.package]
@@ -14,6 +15,7 @@ version = "0.1.0"
 license = "UNLICENSED"
 
 [workspace.dependencies]
+calcar-adapters = { path = "crates/calcar-adapters" }
 calcar-events = { path = "crates/calcar-events" }
 calcar-storage = { path = "crates/calcar-storage" }
 calcar-pty = { path = "crates/calcar-pty" }

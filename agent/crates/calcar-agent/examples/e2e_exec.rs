@@ -2,7 +2,11 @@
 // Not a unit test file: every step exercises real processes and a real
 // SQLite file, and prints PASS lines a reviewer can diff. Deleted only if
 // the E2E script stops using it.
-use calcar_events::{Provider, WorkflowState};
+use calcar_adapters::{
+    for_provider, AdapterError, ApprovalDecision, ApprovalOutcome, PermissionManager,
+    ProviderAdapter, ProviderEvent, SpawnRequest as AdapterSpawn,
+};
+use calcar_events::{EventType, Provider, WorkflowState};
 use calcar_pty::plain::{PlainChild, PlainConfig};
 use calcar_storage::Storage;
 use calcar_workflow::{
@@ -399,6 +403,211 @@ fn main() {
             .expect("after forget")
             == RouteOutcome::Duplicate,
         "old uuid resurrected".to_string(),
+    );
+
+    // ---- adapters ----
+    // Generic over a canned marker run.
+    let mut generic = for_provider(Provider::Generic).expect("generic adapter");
+    check(
+        "adapter-registry-generic",
+        generic.name() == "generic",
+        format!("name={}", generic.name()),
+    );
+    let caps = generic.capabilities();
+    check(
+        "adapter-generic-caps",
+        caps.streaming && caps.stop && !caps.approvals && !caps.interactive_input,
+        format!("caps={caps:?}"),
+    );
+    let mut req = AdapterSpawn::new(vec![
+        "cmd.exe".into(),
+        "/Q".into(),
+        "/C".into(),
+        "echo ADAPTER_MARKER".into(),
+    ]);
+    req.interactive = true;
+    check(
+        "adapter-generic-interactive-unsupported",
+        matches!(generic.spawn(req), Err(AdapterError::Unsupported)),
+        "interactive spawned".to_string(),
+    );
+    generic
+        .spawn(AdapterSpawn::new(vec![
+            "cmd.exe".into(),
+            "/Q".into(),
+            "/C".into(),
+            "echo ADAPTER_MARKER".into(),
+        ]))
+        .expect("generic spawn");
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    let mut seen: Vec<ProviderEvent> = Vec::new();
+    while std::time::Instant::now() < deadline {
+        seen.extend(generic.drain());
+        if seen
+            .iter()
+            .any(|e| e.event_type == EventType::CommandCompleted)
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let kinds: Vec<EventType> = seen.iter().map(|e| e.event_type).collect();
+    check(
+        "adapter-generic-echo",
+        kinds.first() == Some(&EventType::CommandStarted)
+            && kinds.contains(&EventType::CommandCompleted)
+            && seen.iter().any(|e| e.summary.contains("ADAPTER_MARKER")),
+        format!("kinds={kinds:?}"),
+    );
+    check(
+        "adapter-generic-inject-no-child",
+        matches!(
+            for_provider(Provider::Generic).expect("g2").inject(b"x"),
+            Err(AdapterError::NotRunning)
+        ),
+        "fresh inject did not fail".to_string(),
+    );
+    check(
+        "adapter-generic-approval-unsupported",
+        matches!(
+            generic.respond_approval("r", ApprovalDecision::Allow),
+            Err(AdapterError::Unsupported)
+        ),
+        "generic approved".to_string(),
+    );
+    let snap = generic.snapshot();
+    check(
+        "adapter-generic-snapshot",
+        !snap.running && snap.exit_code == Some(0) && snap.provider_session_id.is_none(),
+        format!("snap={snap:?}"),
+    );
+
+    // Providers over canned fixture runs, one per CLI grammar.
+    for (provider, prefix, sess) in [
+        (Provider::Opencode, "OPENCODE", "sess-op"),
+        (Provider::Claude, "CLAUDE", "sess-cl"),
+        (Provider::Codex, "CODEX", "sess-co"),
+    ] {
+        let mut adapter = for_provider(provider).expect("provider adapter");
+        let script = format!(
+            "echo {prefix}_SESSION {sess} & echo {prefix}_START go & echo {prefix}_APPROVAL req-fx do it & echo {prefix}_DONE fin & echo {prefix}_EXIT ok bye"
+        );
+        adapter
+            .spawn(AdapterSpawn::new(vec![
+                "cmd.exe".into(),
+                "/Q".into(),
+                "/C".into(),
+                script,
+            ]))
+            .expect("provider spawn");
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        let mut seen: Vec<ProviderEvent> = Vec::new();
+        while std::time::Instant::now() < deadline {
+            seen.extend(adapter.drain());
+            if seen
+                .iter()
+                .any(|e| e.event_type == EventType::WorkflowCompleted)
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        let kinds: Vec<EventType> = seen.iter().map(|e| e.event_type).collect();
+        check(
+            &format!("adapter-{prefix}-fixture"),
+            kinds.contains(&EventType::AgentStarted)
+                && kinds.contains(&EventType::ApprovalRequired)
+                && kinds.contains(&EventType::WorkflowCompleted),
+            format!("kinds={kinds:?}"),
+        );
+        let approval = seen
+            .iter()
+            .find(|e| e.event_type == EventType::ApprovalRequired)
+            .expect("approval event");
+        check(
+            &format!("adapter-{prefix}-approval-pointer"),
+            approval.detail_pointer.as_deref() == Some("req-fx"),
+            format!("event={approval:?}"),
+        );
+        let snap = adapter.snapshot();
+        check(
+            &format!("adapter-{prefix}-resume"),
+            snap.resume_pointer.as_deref() == Some(sess),
+            format!("snap={snap:?}"),
+        );
+        check(
+            &format!("adapter-{prefix}-approval-deferred"),
+            matches!(
+                adapter.respond_approval("req-fx", ApprovalDecision::Allow),
+                Err(AdapterError::Unsupported)
+            ),
+            "provider approved".to_string(),
+        );
+    }
+
+    // Permission manager: double accept, expiry, wrong device.
+    let perms = PermissionManager::new(&store2);
+    perms
+        .request(
+            "wf-r",
+            "ap-1",
+            "dev-a",
+            "run tests",
+            Duration::from_secs(60),
+        )
+        .expect("approval request");
+    check(
+        "perm-apply",
+        perms
+            .resolve("ap-1", "dev-a", ApprovalDecision::Allow)
+            .expect("resolve")
+            == ApprovalOutcome::Applied,
+        "first resolve not applied".to_string(),
+    );
+    check(
+        "perm-double-accept",
+        perms
+            .resolve("ap-1", "dev-a", ApprovalDecision::Allow)
+            .expect("reresolve")
+            == ApprovalOutcome::Duplicate,
+        "double accept applied".to_string(),
+    );
+    perms
+        .request("wf-r", "ap-exp", "dev-a", "old", Duration::from_secs(0))
+        .expect("expiring request");
+    perms.sweep_expired().expect("sweep");
+    check(
+        "perm-expired",
+        perms
+            .resolve("ap-exp", "dev-a", ApprovalDecision::Allow)
+            .expect("resolve expired")
+            == ApprovalOutcome::Expired,
+        "expired applied".to_string(),
+    );
+    perms
+        .request(
+            "wf-r",
+            "ap-dev",
+            "dev-a",
+            "guarded",
+            Duration::from_secs(60),
+        )
+        .expect("guarded request");
+    check(
+        "perm-wrong-device",
+        perms
+            .resolve("ap-dev", "dev-b", ApprovalDecision::Allow)
+            .expect("wrong device")
+            == ApprovalOutcome::Unknown,
+        "wrong device resolved".to_string(),
+    );
+    check(
+        "perm-bound-device",
+        perms
+            .resolve("ap-dev", "dev-a", ApprovalDecision::Reject)
+            .expect("bound resolve")
+            == ApprovalOutcome::Applied,
+        "bound device failed".to_string(),
     );
 
     let _ = std::fs::remove_dir_all(&dir);

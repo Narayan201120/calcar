@@ -1,0 +1,11 @@
+[package]
+name = "calcar-adapters"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+calcar-events = { workspace = true }
+calcar-pty = { workspace = true }
+calcar-storage = { workspace = true }
+thiserror = { workspace = true }

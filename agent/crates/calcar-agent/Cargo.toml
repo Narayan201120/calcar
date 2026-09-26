@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 calcar-workflow = { workspace = true }
+calcar-adapters = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
