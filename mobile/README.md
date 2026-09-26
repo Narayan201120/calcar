@@ -23,5 +23,7 @@ flutter test
 
 `.github/workflows/mobile-check.yml` installs stable Flutter and runs
 `pub get`, `analyze`, `test`. That workflow is the verification for this
-directory until a local SDK exists. Proto Dart models generate in CI from
-`proto/` once slice 2 lands, so no hand-copied types enter the tree.
+directory until a local SDK exists. The workflow installs pinned protoc
+36.2, activates `protoc_plugin` via the Flutter SDK's Dart, and generates
+Dart models from `proto/calcar/v1/*.proto` into `mobile/lib/gen/`
+(git-ignored) before `pub get`, so no hand-copied types enter the tree.

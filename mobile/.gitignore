@@ -7,3 +7,5 @@ build/
 *.iml
 .pub-cache/
 .pub/
+# Generated Dart protobuf models are CI-built from proto/ until a local SDK exists.
+lib/gen/

@@ -22,6 +22,23 @@ jobs:
         with:
           channel: stable
       - run: flutter --version
+      - name: Install protoc (pinned)
+        run: |
+          set -euo pipefail
+          PROTOC_VERSION=36.2
+          curl -sSL -o /tmp/protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+      - name: Activate Dart protoc plugin
+        run: |
+          dart pub global activate protoc_plugin
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - name: Generate Dart proto models
+        run: |
+          set -euo pipefail
+          mkdir -p lib/gen
+          protoc -I../proto --dart_out=lib/gen ../proto/calcar/v1/*.proto
+          test -n "$(ls -A lib/gen)"
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
