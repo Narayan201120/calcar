@@ -415,3 +415,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - P4 pivots to plain pipe execution plus workflow managers, the provable half. ConPTY waits on box repair or a second machine.
   - The dev-dep add plus remove churned the lockfile mid-session; final tree shows no diff there, verified.
 - **Status:** Implemented
+
+## DEC-032 P4 plain-pipe pivot green
+- **Date/Context:** Sept 26 2026, P4 provable half built with three parallel workers plus main-thread merge and E2E
+- **Context/What:** New `PlainChild` executor at `agent/crates/calcar-pty/src/plain.rs` for non-interactive commands: split pipes, job tree kill, byte caps, deadline wait, drop kill. New `calcar-workflow` crate: `lifecycle.rs` as sole state writer with disconnect projection and restart reconcile, `session.rs` bindings, `router.rs` UUID dedupe with counts. Wired manifests plus module roots at merge. Proof is `scripts/e2e-exec.ps1` driving `agent/crates/calcar-agent/examples/e2e_exec.rs`: 36 PASS lines covering echo, split streams, exit codes, stdin, caps, tree kill, deadlines, validation, drop kill, lifecycle transitions plus refusals, restart reattach plus clean-failed plus terminal, session roundtrip plus restart, router dedupe plus counts plus forget.
+- **The "Why":** ConPTY I/O stays silent on every box tested, so P4 advances on the path that runs: generic commands behind the same job and ring discipline the interactive path will reuse.
+- **Improvement over Previous Solution:** Replaced an all-or-nothing PTY gate with a green execution core plus a red ConPTY tripwire that waits on a healthy box.
+- **Pros:**
+  - Static gates green across the workspace: check, clippy deny warnings, fmt.
+  - Tree kill proved for real here, the exact property ConPTY never demonstrated.
+  - No unit tests added anywhere; the script log is the artifact.
+- **Cons & Trade-offs:**
+  - Live 60 second network drop still needs the connection manager from P5/P7; the router side, same UUID redelivery deduplicated with payload once, is what the E2E pins today.
+  - Merge friction was real: one worker assumed module lines another never wrote, and my runner misread `i32` state as variant names. Both caught by compile plus E2E, not review.
+- **Status:** Implemented

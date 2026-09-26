@@ -1,0 +1,10 @@
+[package]
+name = "calcar-workflow"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+calcar-events = { workspace = true }
+calcar-storage = { workspace = true }
+thiserror = { workspace = true }

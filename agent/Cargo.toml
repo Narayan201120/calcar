@@ -5,6 +5,7 @@ members = [
     "crates/calcar-storage",
     "crates/calcar-pty",
     "crates/calcar-agent",
+    "crates/calcar-workflow",
 ]
 
 [workspace.package]
@@ -16,6 +17,7 @@ license = "UNLICENSED"
 calcar-events = { path = "crates/calcar-events" }
 calcar-storage = { path = "crates/calcar-storage" }
 calcar-pty = { path = "crates/calcar-pty" }
+calcar-workflow = { path = "crates/calcar-workflow" }
 thiserror = "2"
 
 [profile.release]

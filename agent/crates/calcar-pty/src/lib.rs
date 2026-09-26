@@ -19,6 +19,8 @@
 use std::time::Duration;
 use thiserror::Error;
 
+pub mod plain;
+
 #[derive(Debug, Error)]
 pub enum PtyError {
     #[error("windows call {call} failed: {message}")]
