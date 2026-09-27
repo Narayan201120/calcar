@@ -53,7 +53,7 @@ try {
   # registry sidecar and never touches the database.
   $w = curl.exe -s -o NUL -w '%{http_code}' -H "Authorization: Bearer $Token" "$Base/v1/agent/computers/pc-e2e/workflows/wf-e2e"
   Check "warmup" ($w -eq "404") "warm=$w"
-  & 'C:\Program Files\Python312\python.exe' -c "import sqlite3,time; now=int(time.time()*1000); c=sqlite3.connect(r'$T\agent.db'); c.execute('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)',('wf-e2e',4,3,'E2E flow','ps-e2e',now,now)); c.execute('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)',('wf-inter',1,1,'Inter flow',None,now,now)); c.execute('INSERT INTO pending_requests VALUES (?,?,?,?,?,?,?,?)',('appr-e','wf-e2e',2,1,now,now+600000,None,None)); c.execute('INSERT INTO session_bindings VALUES (?,?,?,?)',('wf-inter','cli-sess-9',None,now)); c.commit(); print('seeded', c.total_changes)" | Tee-Object -Append -FilePath $LogFile
+  & 'C:\Program Files\Python312\python.exe' -c "import sqlite3,time; now=int(time.time()*1000); c=sqlite3.connect(r'$T\agent.db'); c.execute('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)',('wf-e2e',4,3,'E2E flow','ps-e2e',now,now)); c.execute('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)',('wf-inter',1,1,'Inter flow',None,now,now)); c.execute('INSERT INTO pending_requests VALUES (?,?,?,?,?,?,?,?)',('appr-e','wf-e2e',2,1,now,now+600000,None,None)); c.execute('INSERT INTO pending_requests VALUES (?,?,?,?,?,?,?,?)',('appr-rt','wf-e2e',2,1,now,now+600000,None,None)); c.execute('INSERT INTO pending_requests VALUES (?,?,?,?,?,?,?,?)',('appr-exp','wf-e2e',2,1,now-600000,now-60000,None,None)); c.execute('INSERT INTO session_bindings VALUES (?,?,?,?)',('wf-inter','cli-sess-9',None,now)); c.commit(); print('seeded', c.total_changes)" | Tee-Object -Append -FilePath $LogFile
 
   $H = "Authorization: Bearer $Token"
   $r = curl.exe -s -o NUL -w '%{http_code} %{size_download}' "$Base/v1/agent/devices?user_id=u1"
@@ -93,6 +93,27 @@ try {
   Set-Content (Join-Path $T "in-inter.json") -NoNewline -Value '{"input_id":"in-inter","body":"echo HI","destructive":false}'
   $inter = curl.exe -s -X POST -H $H -H 'X-Request-ID: in-inter' -H 'Content-Type: application/json' --data-binary "@$T\in-inter.json" "$Base/v1/agent/workflows/wf-inter/inputs" | ConvertFrom-Json
   Check "interactive-501" ($inter.code -eq "CONPTY_UNAVAILABLE" -and $inter.has_binding -eq $true) "body=$($inter | ConvertTo-Json -Compress)"
+
+  # Approval roundtrip, timed: apply once, duplicates dead, expired dead.
+  Set-Content (Join-Path $T "appr-ok.json") -NoNewline -Value '{"approval_id":"appr-rt","allow":true}'
+  $t0 = Get-Date
+  $rt = curl.exe -s -X POST -H $H -H 'X-Request-ID: appr-rt' -H 'Content-Type: application/json' --data-binary "@$T\appr-ok.json" "$Base/v1/agent/workflows/wf-e2e/approvals" | ConvertFrom-Json
+  $ms = [int]((Get-Date) - $t0).TotalMilliseconds
+  Check "roundtrip-applied" ($rt.resolution -eq "approved") "body=$($rt | ConvertTo-Json -Compress) ms=$ms"
+  Log "roundtrip-ms=$ms"
+  $rt2 = curl.exe -s -X POST -H $H -H 'X-Request-ID: appr-rt' -H 'Content-Type: application/json' --data-binary "@$T\appr-ok.json" "$Base/v1/agent/workflows/wf-e2e/approvals" | ConvertFrom-Json
+  Check "roundtrip-duplicate-dead" ($rt2.code -eq "ALREADY_RESOLVED") "body=$($rt2 | ConvertTo-Json -Compress)"
+  Set-Content (Join-Path $T "appr-no.json") -NoNewline -Value '{"approval_id":"appr-missing","allow":true}'
+  $rt3 = curl.exe -s -X POST -H $H -H 'X-Request-ID: appr-missing' -H 'Content-Type: application/json' --data-binary "@$T\appr-no.json" "$Base/v1/agent/workflows/wf-e2e/approvals" | ConvertFrom-Json
+  Check "roundtrip-unknown-dead" ($rt3.code -eq "APPROVAL_UNKNOWN") "body=$($rt3 | ConvertTo-Json -Compress)"
+  Set-Content (Join-Path $T "appr-exp.json") -NoNewline -Value '{"approval_id":"appr-exp","allow":true}'
+  $rt4 = curl.exe -s -X POST -H $H -H 'X-Request-ID: appr-exp' -H 'Content-Type: application/json' --data-binary "@$T\appr-exp.json" "$Base/v1/agent/workflows/wf-e2e/approvals" | ConvertFrom-Json
+  Check "roundtrip-expired-dead" ($rt4.code -eq "EXPIRED") "body=$($rt4 | ConvertTo-Json -Compress)"
+  $rt5 = curl.exe -s -X POST -H $H -H 'X-Request-ID: wrong-key' -H 'Content-Type: application/json' --data-binary "@$T\appr-ok.json" "$Base/v1/agent/workflows/wf-e2e/approvals" | ConvertFrom-Json
+  Check "roundtrip-key-mismatch-dead" ($rt5.code -eq "MALFORMED") "body=$($rt5 | ConvertTo-Json -Compress)"
+  $snap3 = curl.exe -s -H $H "$Base/v1/agent/computers/pc-e2e/workflows/wf-e2e" | ConvertFrom-Json
+  $verdict = @($snap3.approvals | Where-Object { $_.approval_id -eq "appr-rt" })
+  Check "roundtrip-verdict-in-ring" ($verdict.Count -eq 1 -and $verdict[0].resolution -eq "approved") "approvals=$($snap3.approvals | ConvertTo-Json -Compress)"
 
   Set-Location $RepoRoot
   if ($failures -eq 0) { Log "GREEN generic end to end held" } else { Log "RED failures=$failures"; exit 1 }
