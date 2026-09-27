@@ -594,15 +594,15 @@ void main() {
         token: 'tok-123',
       );
 
-      final HttpSnapshotSource http = source as HttpSnapshotSource;
-      addTearDown(http.agent.close);
+      final HttpSnapshotSource httpSource = source as HttpSnapshotSource;
+      addTearDown(httpSource.agent.close);
 
-      expect(http.api.baseUrl, 'https://backend.test');
-      expect(http.api.token, 'tok-123');
+      expect(httpSource.api.baseUrl, 'https://backend.test');
+      expect(httpSource.api.token, 'tok-123');
       // The mesh url takes the agent client's own trailing-slash trim,
       // so a shell holding either form addresses one host.
-      expect(http.agent.baseUrl, 'https://agent.test');
-      expect(http.agent.token, 'tok-123');
+      expect(httpSource.agent.baseUrl, 'https://agent.test');
+      expect(httpSource.agent.token, 'tok-123');
     });
 
     test('contract: an injected client is used as given', () async {
@@ -625,15 +625,15 @@ void main() {
         apiClient: api,
       );
 
-      final HttpSnapshotSource http = source as HttpSnapshotSource;
-      addTearDown(http.agent.close);
-      final List<Device> devices = await http.fetchDevices();
+      final HttpSnapshotSource httpSource = source as HttpSnapshotSource;
+      addTearDown(httpSource.agent.close);
+      final List<Device> devices = await httpSource.fetchDevices();
 
       expect(devices.single.deviceId, 'PC-1');
       expect(called, isTrue);
       // The injected side wins, the other side is still built here.
-      expect(http.agent.baseUrl, 'https://agent.test');
-      expect(http.agent.token, 'tok-123');
+      expect(httpSource.agent.baseUrl, 'https://agent.test');
+      expect(httpSource.agent.token, 'tok-123');
     });
   });
 }

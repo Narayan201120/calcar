@@ -40,7 +40,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// chips, approval cards, and the lock screen read the same everywhere.
 final ThemeData calcarTheme = ThemeData(
   useMaterial3: true,
-  colorScheme: ColorScheme.fromSeed(seedColor: Color(0xFF2E6E4E)),
+  colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E6E4E)),
 );
 
 int _requestCounter = 0;
@@ -549,31 +549,6 @@ class _CalcarAppState extends State<CalcarApp> {
     );
   }
 
-  /// A push tap fetched full detail before publishing the link. Seeding it
-  /// into the providers here is what lets the route skip its own fetch:
-  /// one snapshot per open, whichever side got there first.
-  static void seedDetail(WidgetRef ref, DeepLinkRequest request) {
-    final DeepLinkDetail? detail = request.detail;
-    if (detail is ComputerSnapshotDetail) {
-      ref
-          .read(computerControllerProvider(detail.snapshot.deviceId).notifier)
-          .seed(detail.snapshot);
-      return;
-    }
-    if (detail is WorkflowBuffersDetail) {
-      ref
-          .read(
-            workflowControllerProvider(
-              WorkflowKey(
-                computerId: detail.buffers.computerId,
-                workflowId: detail.buffers.workflowId,
-              ),
-            ).notifier,
-          )
-          .seed(detail.buffers);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -614,6 +589,26 @@ class _SeededScopeState extends ConsumerState<_SeededScope> {
   @override
   Widget build(BuildContext context) {
     return RealtimeScope(child: widget.child);
+  }
+}
+
+/// Unknown route frame. A name [AppRoutes.generate] cannot resolve lands
+/// here rather than on a blank frame, so a bad link reads as a dead end
+/// instead of an empty phone.
+class _DeadEndView extends StatelessWidget {
+  final String routeName;
+
+  const _DeadEndView({required this.routeName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Not found')),
+      body: Center(
+        key: const ValueKey('route-unknown'),
+        child: Text('Unknown route: $routeName'),
+      ),
+    );
   }
 }
 

@@ -99,7 +99,7 @@ WorkflowBuffers _buffers() {
       ),
     ],
     chat: <BufferedChat>[
-      BufferedChat(messageId: 'm-1', body: 'build it', seqNo: 10),
+      const BufferedChat(messageId: 'm-1', body: 'build it', seqNo: 10),
     ],
     terminalLines: const <String>['cloning repo'],
     terminalTotalLines: 1,

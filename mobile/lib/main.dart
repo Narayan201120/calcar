@@ -72,7 +72,7 @@ void main() {
         apiClientProvider.overrideWithValue(api),
         agentChannelProvider.overrideWithValue(agent),
         socketConfigProvider.overrideWithValue(
-          SocketConfig(
+          const SocketConfig(
             baseUrl: _backendBaseUrl,
             userId: _userId,
             token: _sessionToken,

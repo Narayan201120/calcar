@@ -119,8 +119,8 @@ class AgentChannelClient {
   }
 
   /// GET /v1/agent/computers/{id}: header plus sysinfo on demand.
-  ComputerSnapshot fetchComputer(String computerId) {
-    final http.Response res = _http.get(
+  Future<ComputerSnapshot> fetchComputer(String computerId) async {
+    final http.Response res = await _http.get(
       _uri('/v1/agent/computers/$computerId'),
       headers: _headers(),
     );
@@ -157,8 +157,8 @@ class AgentChannelClient {
   }
 
   /// GET /v1/agent/computers/{id}/sysinfo: CPU, RAM, GPU, disk. Lazy.
-  Map<String, dynamic> fetchSysinfo(String computerId) {
-    final http.Response res = _http.get(
+  Future<Map<String, dynamic>> fetchSysinfo(String computerId) async {
+    final http.Response res = await _http.get(
       _uri('/v1/agent/computers/$computerId/sysinfo'),
       headers: _headers(),
     );
@@ -168,8 +168,8 @@ class AgentChannelClient {
   /// GET /v1/agent/workflows/{id}: full capped buffers plus a
   /// last_seq_no high-water mark the state layer drops stale deltas
   /// against.
-  WorkflowBuffers fetchWorkflow(String computerId, String workflowId) {
-    final http.Response res = _http.get(
+  Future<WorkflowBuffers> fetchWorkflow(String computerId, String workflowId) async {
+    final http.Response res = await _http.get(
       _uri('/v1/agent/computers/$computerId/workflows/$workflowId'),
       headers: _headers(),
     );
@@ -179,18 +179,19 @@ class AgentChannelClient {
   /// POST /v1/agent/approvals/{id}: resolve one approval. Idempotency
   /// key required: a retried send after a 60 second drop must apply at
   /// most once, so the key is caller-supplied and stable per resolve.
-  void postApprovalResolve({
+  Future<void> postApprovalResolve({
     required String workflowId,
     required String requestId,
     required bool allow,
-  }) {
-    final http.Response res = _http.post(
+  }) async {
+    final http.Response res = await _http.post(
       _uri('/v1/agent/workflows/$workflowId/approvals'),
       headers: _headers(requestId: requestId),
-    body: jsonEncode(<String, dynamic>{
-      'approval_id': requestId,
-      'allow': allow,
-    });
+      body: jsonEncode(<String, dynamic>{
+        'approval_id': requestId,
+        'allow': allow,
+      }),
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       _fail(res.statusCode);
     }
@@ -198,20 +199,21 @@ class AgentChannelClient {
 
   /// POST /v1/agent/workflows/{id}/inputs: one input with a client-side
   /// UUID, so a retry after a drop duplicates nothing.
-  void postInput({
+  Future<void> postInput({
     required String workflowId,
     required String inputId,
     required String body,
     required bool destructive,
-  }) {
-    final http.Response res = _http.post(
+  }) async {
+    final http.Response res = await _http.post(
       _uri('/v1/agent/workflows/$workflowId/inputs'),
       headers: _headers(requestId: inputId),
-    body: jsonEncode(<String, dynamic>{
-      'input_id': inputId,
-      'body': body,
-      'destructive': destructive,
-    });
+      body: jsonEncode(<String, dynamic>{
+        'input_id': inputId,
+        'body': body,
+        'destructive': destructive,
+      }),
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       _fail(res.statusCode);
     }
@@ -305,7 +307,7 @@ WorkflowBuffers _buffersFrom(Map<String, dynamic> j) {
         detail: (r['detail'] ?? '').toString(),
         expiresAtMillis:
             (r['expires_at_millis'] as num?)?.toInt() ?? 0,
-        resolution: resolution == null ? null : resolution.toString(),
+        resolution: resolution?.toString(),
         destructive: r['destructive'] == true,
       ),
     );
