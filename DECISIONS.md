@@ -482,3 +482,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - No Flutter SDK here, so every round is push plus wait. Blind speed demands tiny slices.
   - Push plugins, hardware keystore, QR rendering, SQLite cache reader all still open. The shell is correct and unproven on glass.
 - **Status:** Implemented
+
+## DEC-037 P7 connection manager live
+- **Date/Context:** Sept 27 2026, one worker on a new crate, main-thread merge with an independent curl smoke run
+- **Context/What:** New `calcar-connect` crate serving the six `/v1/agent/*` routes the phone already calls, over `tiny_http`, file-backed store, bearer token from a config file, generic commands through `PlainChild`, interactive inputs answered 501 with a binding flag. Endpoint shapes byte-match the mobile parser.
+- **The "Why":** Every mobile screen showed its failure frame without this. The thin spine starts here.
+- **Improvement over Previous Solution:** Replaced no agent transport with a running server the phone contract already describes.
+- **Pros:**
+  - Independent smoke run green: 401 empty on bad tokens, snapshot shapes exact, approval applied then rejected on repeat, input delivered then duplicated, ring grew 0 to 2, tail file on disk, sysinfo keys present.
+  - Static gates green. No unit tests added; curl is the artifact.
+- **Cons & Trade-offs:**
+  - Token is a config-file secret with no backend revocation sync yet. Changing it plus revoking backend-side is the current rotation story, documented as a hardening item.
+  - Migration runs per request, not at boot. Fine for one user, revisit with connection pooling later.
+  - Devices list comes from a registry sidecar, not the store. Touch-to-list gap stays open with the two seam notes the worker left.
+- **Status:** Implemented

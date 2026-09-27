@@ -1,0 +1,21 @@
+[package]
+name = "calcar-connect"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "calcar-connect"
+path = "src/main.rs"
+
+[lib]
+name = "calcar_connect"
+path = "src/lib.rs"
+
+[dependencies]
+calcar-events = { workspace = true }
+calcar-storage = { workspace = true }
+calcar-workflow = { workspace = true }
+calcar-pty = { workspace = true }
+thiserror = { workspace = true }
+tiny_http = "0.12"
