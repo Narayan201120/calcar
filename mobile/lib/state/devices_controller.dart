@@ -15,12 +15,18 @@ class DevicesState {
   final bool loading;
   final String error;
 
+  /// True once any refresh completed, success or failure. Screens skip
+  /// their mount fetch when this is set, so a cold-start gate plus a
+  /// screen mount costs exactly one refresh, never two.
+  final bool loaded;
+
   const DevicesState({
     required this.devices,
     required this.presenceById,
     required this.ownerDeviceId,
     required this.loading,
     this.error = '',
+    this.loaded = false,
   });
 
   factory DevicesState.initial() {
@@ -38,6 +44,7 @@ class DevicesState {
     String? ownerDeviceId,
     bool? loading,
     String? error,
+    bool? loaded,
   }) {
     return DevicesState(
       devices: devices ?? this.devices,
@@ -45,6 +52,7 @@ class DevicesState {
       ownerDeviceId: ownerDeviceId ?? this.ownerDeviceId,
       loading: loading ?? this.loading,
       error: error ?? this.error,
+      loaded: loaded ?? this.loaded,
     );
   }
 
@@ -78,9 +86,10 @@ class DevicesController extends StateNotifier<DevicesState> {
         presenceById: Map<String, Presence>.unmodifiable(presence),
         ownerDeviceId: ownerId,
         loading: false,
+        loaded: true,
       );
     } on Object catch (e) {
-      state = state.copyWith(loading: false, error: '$e');
+      state = state.copyWith(loading: false, error: '$e', loaded: true);
     }
   }
 

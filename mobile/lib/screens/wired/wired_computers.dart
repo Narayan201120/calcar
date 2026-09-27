@@ -28,7 +28,11 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
     super.initState();
     // Deferred by a microtask: refresh sets provider state synchronously,
     // and a provider must never be modified while the tree is building.
-    Future<void>.microtask(_pullRefresh);
+    // Skipped when a refresh already completed, so a cold-start gate plus
+    // this mount costs exactly one fetch instead of two.
+    if (!ref.read(devicesControllerProvider).loaded) {
+      Future<void>.microtask(_pullRefresh);
+    }
   }
 
   @override
