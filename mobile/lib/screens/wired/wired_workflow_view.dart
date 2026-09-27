@@ -15,7 +15,7 @@
 // that is stable per item, so a send that lost its ack is never applied
 // twice. A failed send is reported, never retried: single resolve wins
 // upstream and re-posting would be a second decision.
-import 'dart:async' hide ConnectionState;
+import 'dart:async';
 
 import 'package:calcar/api/agent_channel.dart';
 import 'package:calcar/screens/wired/wired_transport.dart';
@@ -24,7 +24,7 @@ import 'package:calcar/screens/workflow/files_tab.dart';
 import 'package:calcar/screens/workflow/workflow_models.dart';
 import 'package:calcar/screens/workflow/workflow_screen.dart';
 import 'package:calcar/state/state.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Terminal lines per page. The agent owns the tail and the state layer

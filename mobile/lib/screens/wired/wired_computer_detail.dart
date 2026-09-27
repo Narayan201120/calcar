@@ -20,7 +20,7 @@ final sysinfoProvider = FutureProvider.family<Sysinfo, String>(
     // a provider may not be watched once its body has returned.
     final AgentChannelClient channel = ref.watch(agentChannelProvider);
     return Future<Sysinfo>(
-      () => sysinfoFrom(channel.fetchSysinfo(computerId)),
+      () async => sysinfoFrom(await channel.fetchSysinfo(computerId)),
     );
   },
 );

@@ -146,11 +146,11 @@ class FakeAgentChannel extends AgentChannelClient {
   final List<Map<String, Object?>> resolves = <Map<String, Object?>>[];
 
   @override
-  void postApprovalResolve({
+  Future<void> postApprovalResolve({
     required String workflowId,
     required String requestId,
     required bool allow,
-  }) {
+  }) async {
     resolves.add(<String, Object?>{
       'workflowId': workflowId,
       'requestId': requestId,
