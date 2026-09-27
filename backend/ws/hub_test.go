@@ -179,6 +179,16 @@ func TestSubscribeReceivesDecided(t *testing.T) {
 	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/v1/ws"
 
 	c := dialWS(t, url, "tok-owner")
+	// Wait for server-side registration before notifying: fanout
+	// snapshots live conns, so a Notify racing the upgrade handler
+	// would land on nobody and fail after the read deadline.
+	deadline := time.Now().Add(5 * time.Second)
+	for h.ConnCount() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("server never registered the conn")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	// Keep the conn alive past the short test heartbeat windows.
 	stopHB := make(chan struct{})
 	defer close(stopHB)
@@ -316,14 +326,22 @@ func TestOverflowDropsAndMarksCatchup(t *testing.T) {
 
 	c := dialWS(t, url, "tok-owner")
 	defer func() { _ = c.Close(websocket.StatusNormalClosure, "x") }()
-	time.Sleep(100 * time.Millisecond) // let presence/connect settle
+	// Wait for registration, not wall time: notifying before the
+	// server tracks the conn drops events on the floor.
+	deadline := time.Now().Add(5 * time.Second)
+	for h.ConnCount() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("server never registered the conn")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	// Client never reads; large payloads fill socket + 64-deep buffer.
 	big := strings.Repeat("x", 64*1024)
 	for i := 0; i < 300; i++ {
 		h.Notify(Event{UserID: "user-1", Type: EventAttentionPending,
 			Payload: map[string]any{"blob": big, "seq": i}})
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(5 * time.Second)
 	for h.DroppedFor("PH-1") == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("no overflow drops recorded with an unread 64-deep buffer")
