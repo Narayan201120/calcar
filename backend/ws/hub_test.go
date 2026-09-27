@@ -168,7 +168,10 @@ func TestSubscribeReceivesDecided(t *testing.T) {
 	f := newWSFake()
 	f.addDevice("PH-1", "user-1", store.RoleOwnerPhone, false, "tok-owner")
 	h := NewHub(f)
-	h.SetHeartbeatInterval(100 * time.Millisecond)
+	// Wide windows: shared CI runners stall hundreds of milliseconds,
+	// and this test is about delivery, not timing. Timing behavior has
+	// its own tests with tight intervals below.
+	h.SetHeartbeatInterval(500 * time.Millisecond)
 	h.Go()
 	defer h.Close()
 	srv := httptest.NewServer(h)

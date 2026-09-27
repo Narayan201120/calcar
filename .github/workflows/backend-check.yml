@@ -46,5 +46,7 @@ jobs:
         working-directory: backend
       - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5
       - uses: bufbuild/buf-setup-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: buf generate --template proto/buf.gen.yaml proto/
       - run: git diff --exit-code -- backend/gen
