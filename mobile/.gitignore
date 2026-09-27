@@ -2,6 +2,8 @@
 .dart_tool/
 .build/
 build/
+# Android platform folder is scaffolded in CI from flutter create.
+android/
 .idea/
 .DS_Store
 *.iml

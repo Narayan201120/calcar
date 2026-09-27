@@ -36,6 +36,13 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      - name: Scaffold Android platform
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org dev.calcar --project-name calcar /tmp/plat
+          cp -r /tmp/plat/android ./android
+          rm -rf /tmp/plat
+          test -f android/app/build.gradle
       - name: Build debug APK
         run: |
           set -euo pipefail
