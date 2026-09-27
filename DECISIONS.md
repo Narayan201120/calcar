@@ -496,3 +496,14 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Migration runs per request, not at boot. Fine for one user, revisit with connection pooling later.
   - Devices list comes from a registry sidecar, not the store. Touch-to-list gap stays open with the two seam notes the worker left.
 - **Status:** Implemented
+
+## DEC-038 generic end to end green
+- **Date/Context:** Sept 27 2026, first P7 spine test through the new agent surface
+- **Context/What:** Committed `scripts/e2e-connect.ps1`: builds, serves a seeded store, asserts 14 checks over curl, kills the server. Auth rejects empty, snapshot shapes match the mobile parser, approval applies then rejects, input delivers then dedupes, ring grows with events, tail file lands, interactive answers 501 with binding flag.
+- **The "Why":** The phone-shaped surface is now proven repeatably, not just once by hand.
+- **Improvement over Previous Solution:** Replaced a manual smoke run with a script the gate can rerun.
+- **Pros:**
+  - Caught one real script bug on the way: warm-up must hit a store route since devices never migrates SQLite.
+- **Cons & Trade-offs:**
+  - Seeding goes through sqlite directly since the server exposes no workflow creation route. Acceptable for a test harness, never a product path.
+- **Status:** Implemented
