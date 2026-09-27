@@ -42,7 +42,7 @@ jobs:
           flutter create --platforms=android --org dev.calcar --project-name calcar /tmp/plat
           cp -r /tmp/plat/android ./android
           rm -rf /tmp/plat
-          test -f android/app/build.gradle
+          test -f android/app/build.gradle -o -f android/app/build.gradle.kts
       - name: Build debug APK
         run: |
           set -euo pipefail
