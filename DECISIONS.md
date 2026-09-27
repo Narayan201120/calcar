@@ -469,3 +469,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Generated code excluded from analysis, and models never land in the tree. Drift check waits on a local SDK.
   - One backend red along the way was pure infra, rate-limited tool download, green on rerun.
 - **Status:** Implemented
+
+## DEC-036 P6 slice 3 screens plus state green
+- **Date/Context:** Sept 26-27 2026, three parallel screen workers plus merge, blind Dart throughout, CI as the only compiler
+- **Context/What:** State layer with caps, snapshot-first ordering, freeze on disconnect, single-resolve approvals. Five screen groups on constructor data, wired to providers at merge. App shell with route table, deep links, cold start, push registration, first run. HTTP snapshot source over the P3 client plus the agent channel.
+- **The "Why":** The phone renders everything in PLAN P6 except push plugins, keystore, and QR art.
+- **Improvement over Previous Solution:** Replaced an empty list with the full thin client behind one gate.
+- **Pros:**
+  - 113 widget tests green in CI, each naming its contract.
+  - CI caught real bugs four times: missing exports, async transport written sync, double fetch on cold start, error string owned twice. All fixed in owners, never in tests.
+- **Cons & Trade-offs:**
+  - No Flutter SDK here, so every round is push plus wait. Blind speed demands tiny slices.
+  - Push plugins, hardware keystore, QR rendering, SQLite cache reader all still open. The shell is correct and unproven on glass.
+- **Status:** Implemented
