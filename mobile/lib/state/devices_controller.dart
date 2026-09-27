@@ -69,10 +69,34 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   final SnapshotSource _source;
 
+  /// In-flight refresh shared by concurrent callers. The cold-start
+  /// gate and a mounting screen race on first paint; without this both
+  /// fetch and the gate counts two refreshes for one boot.
+  Future<void>? _pending;
+
   /// Pull refresh: one snapshot fetch replacing the whole list.
   /// Presence arrives with the same refresh; the Owner id is fetched
   /// once and then kept.
-  Future<void> refresh() async {
+  Future<void> refresh() {
+    final Future<void>? pending = _pending;
+    if (pending != null) {
+      return pending;
+    }
+    final Future<void> flight = _refreshInner();
+    _pending = flight;
+    return flight.whenComplete(() => _pending = null);
+  }
+
+  /// Clears a consumed failure. The cold-start gate owns the failure
+  /// frame, so it takes the error string when it paints its strip and
+  /// the list behind keeps rendering the cached rows.
+  void clearError() {
+    if (state.error.isNotEmpty) {
+      state = state.copyWith(error: '');
+    }
+  }
+
+  Future<void> _refreshInner() async {
     state = state.copyWith(loading: true, error: '');
     try {
       final List<Device> devices = await _source.fetchDevices();

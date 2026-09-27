@@ -777,8 +777,11 @@ class ColdStartController extends StateNotifier<ColdStartState> {
     }
     // The refresh reports failure through the devices state, not a return
     // value, and the raw error string never reaches the screen: PLAN
-    // bans error strings from user facing telemetry.
+    // bans error strings from user facing telemetry. The gate owns the
+    // failure frame, so it takes the error string when it paints its
+    // strip and the list behind keeps rendering the cached rows.
     final String error = _ref.read(devicesControllerProvider).error;
+    _ref.read(devicesControllerProvider.notifier).clearError();
     state = ColdStartState(
       phase: error.isEmpty ? BootPhase.live : BootPhase.liveStale,
       deviceRows: probe.deviceRows,
