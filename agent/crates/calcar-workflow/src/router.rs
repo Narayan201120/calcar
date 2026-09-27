@@ -69,16 +69,17 @@ impl<'a> InputRouter<'a> {
     }
 
     /// Deliver one input. The first UUID per workflow wins and resolves its
-    /// row with `payload`. Repeats drop as duplicates and bump the counter.
-    /// A repeat that finds its row still pending (claim without confirm, the
-    /// agent died in between) confirms and delivers it once.
+    /// row with an empty receipt. Repeats drop as duplicates and bump the
+    /// counter. A repeat that finds its row still pending (claim without
+    /// confirm, the agent died in between) confirms and delivers it once.
+    /// The input text itself is never persisted: dedupe keys on the
+    /// request id, and the caller already holds the text it just wrote.
     /// Fails on empty ids (InvalidState), unknown workflow (NotFound),
     /// storage IO.
     pub fn deliver(
         &mut self,
         workflow_id: &str,
         input_id: &str,
-        payload: &str,
     ) -> Result<RouteOutcome, StorageError> {
         if workflow_id.is_empty() {
             return Err(StorageError::InvalidState(
@@ -96,11 +97,11 @@ impl<'a> InputRouter<'a> {
             .create_pending_request(&key, workflow_id, RequestKind::Input, None)
         {
             Ok(()) => {
-                self.storage.resolve_pending_request(&key, payload)?;
+                self.storage.resolve_pending_request(&key, "")?;
                 bump(&mut self.delivered, workflow_id);
                 Ok(RouteOutcome::Delivered)
             }
-            Err(first) => match self.storage.resolve_pending_request(&key, payload) {
+            Err(first) => match self.storage.resolve_pending_request(&key, "") {
                 // Row existed but was never confirmed. The earlier attempt
                 // died between claim and confirm, so this retry applies it.
                 Ok(()) => {

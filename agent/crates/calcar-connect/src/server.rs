@@ -313,7 +313,7 @@ impl ConnectServer {
                 Err(error) => return error_body(500, "INTERNAL", &short_error(&error.to_string())),
             };
             let mut router = InputRouter::new(&storage);
-            match router.deliver(workflow, &input_id, &text) {
+            match router.deliver(workflow, &input_id) {
                 Err(StorageError::NotFound(_)) => {
                     return error_body(404, "WORKFLOW_UNKNOWN", "unknown workflow");
                 }

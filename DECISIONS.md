@@ -519,3 +519,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - The outage is scripted silence, not a real cable pull. Socket backoff against a true outage still waits on a live network test.
   - Seeding stays sqlite-direct for the same reason as the generic script.
 - **Status:** Implemented
+
+## DEC-040 privacy sweep green, input text no longer retained
+- **Date/Context:** Sept 27 2026, P7 hardening round one, committed `scripts/privacy-grep.ps1`
+- **Context/What:** Canary sweep over a live agent run: prompt-shaped and key-shaped canaries through exec, then grep of server logs, event summaries, snapshot bodies, with the tail file as positive control. Static audit alongside: backend API package has no logging statements at all, WS logs carry ids only, push payloads carry ids plus kind only, mobile has one debugPrint behind a tested no-content sink.
+- **The "Why":** Telemetry must be proven clean, not assumed clean.
+- **Improvement over Previous Solution:** Replaced assumption with a rerunnable gate plus one real retention fix.
+- **Pros:**
+  - Sweep green: logs clean, summaries clean, snapshots clean, tail holds the canary.
+  - Found and fixed live retention: input bodies sat in `resolve_payload` with zero readers, so the router no longer takes or stores the text. Dedupe keys on the request id, unchanged behavior, all three E2E suites re-proven.
+- **Cons & Trade-offs:**
+  - Approval verdicts still persist as tiny allow or reject receipts. Needed for snapshot display, kept deliberately.
+  - Backend side proven statically only here, no local Postgres or Redis. The canary run against live stores waits on CI plumbing or a local database.
+- **Status:** Implemented

@@ -367,12 +367,12 @@ fn main() {
     let mut router = InputRouter::new(&store2);
     check(
         "router-first",
-        router.deliver("wf-r", "in-1", "hello").expect("deliver") == RouteOutcome::Delivered,
+        router.deliver("wf-r", "in-1").expect("deliver") == RouteOutcome::Delivered,
         "first not delivered".to_string(),
     );
     check(
         "router-duplicate",
-        router.deliver("wf-r", "in-1", "hello").expect("redeliver") == RouteOutcome::Duplicate,
+        router.deliver("wf-r", "in-1").expect("redeliver") == RouteOutcome::Duplicate,
         "repeat not dropped".to_string(),
     );
     check(
@@ -382,12 +382,12 @@ fn main() {
     );
     check(
         "router-cross-workflow",
-        router.deliver("wf-nobind", "in-1", "x").expect("cross") == RouteOutcome::Delivered,
+        router.deliver("wf-nobind", "in-1").expect("cross") == RouteOutcome::Delivered,
         "uuid leaked across workflows".to_string(),
     );
     check(
         "router-unknown",
-        router.deliver("nope", "in-9", "x").is_err(),
+        router.deliver("nope", "in-9").is_err(),
         "unknown accepted".to_string(),
     );
     let (d, u) = router.forget_workflow("wf-r");
@@ -398,10 +398,7 @@ fn main() {
     );
     check(
         "router-still-duplicate",
-        router
-            .deliver("wf-r", "in-1", "hello")
-            .expect("after forget")
-            == RouteOutcome::Duplicate,
+        router.deliver("wf-r", "in-1").expect("after forget") == RouteOutcome::Duplicate,
         "old uuid resurrected".to_string(),
     );
 
