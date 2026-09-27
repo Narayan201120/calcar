@@ -507,3 +507,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
 - **Cons & Trade-offs:**
   - Seeding goes through sqlite directly since the server exposes no workflow creation route. Acceptable for a test harness, never a product path.
 - **Status:** Implemented
+
+## DEC-039 P7 spine green, outage survived
+- **Date/Context:** Sept 27 2026, final P7 spine segment plus existing generic and approval proofs
+- **Context/What:** Committed `scripts/e2e-drop.ps1`: a long command runs while contact stops for a full 60 seconds, then retries with identical UUIDs plus one new input. Nine checks: pre-drop delivery, duplicates on retry, new input delivered, long command survived, ring grew with no repeated completions, workflow never completed.
+- **The "Why":** Disconnect survival is the P7 gate that matters most. A phone that loses the network mid-run must rejoin the same session with nothing lost and nothing doubled.
+- **Improvement over Previous Solution:** Replaced an untested assumption with a scripted outage.
+- **Pros:**
+  - Distinct UUIDs delivered exactly once across the outage, retries deduplicated, ring shows no gap and no repeat.
+- **Cons & Trade-offs:**
+  - The outage is scripted silence, not a real cable pull. Socket backoff against a true outage still waits on a live network test.
+  - Seeding stays sqlite-direct for the same reason as the generic script.
+- **Status:** Implemented
