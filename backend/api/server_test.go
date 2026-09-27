@@ -867,3 +867,185 @@ func newFakeServer(t *testing.T) (*Server, *fakeStore) {
 	f := newFake()
 	return NewServer(f), f
 }
+
+// Contract: every other mutation gated by X-Request-ID rejects reuse with
+// 409 REPLAYED_ID. Each subtest fails for exactly one reason: the second use
+// of the same RID on that mutation is a replay.
+func TestReplayedRequestIDOtherMutations(t *testing.T) {
+	t.Run("revoke", func(t *testing.T) {
+		srv, f := newTestServer()
+		uid, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+		tok := authtoken(t, srv, ownerID, ownerPriv)
+		pub, _ := newKeypair(t)
+		fp, err := trust.FingerprintEd25519Pub(pub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.mu.Lock()
+		f.devices["PH-VICTIM"] = store.Device{ID: "PH-VICTIM", UserID: uid, Role: store.RoleTrustedPhone, DisplayName: "Victim", PubKey: pub, Fingerprint: fp}
+		f.mu.Unlock()
+		rid := freshRID()
+		body := map[string]any{"reason": "lost"}
+		if first := doReq(t, srv, "POST", "/v1/devices/PH-VICTIM/revoke", body, tok, rid); first.Code != http.StatusOK {
+			t.Fatalf("first revoke = %d %s, want 200", first.Code, first.Body.String())
+		}
+		second := doReq(t, srv, "POST", "/v1/devices/PH-VICTIM/revoke", body, tok, rid)
+		if second.Code != http.StatusConflict {
+			t.Fatalf("replayed revoke = %d, want 409", second.Code)
+		}
+		if decodeBody(t, second)["error"] != trust.CodeReplayedID {
+			t.Fatalf("replayed revoke code = %s", second.Body.String())
+		}
+	})
+
+	t.Run("heartbeat", func(t *testing.T) {
+		srv, _ := newTestServer()
+		_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+		tok := authtoken(t, srv, ownerID, ownerPriv)
+		rid := freshRID()
+		body := map[string]any{"online": true}
+		if first := doReq(t, srv, "POST", "/v1/presence/heartbeat", body, tok, rid); first.Code != http.StatusOK {
+			t.Fatalf("first heartbeat = %d %s, want 200", first.Code, first.Body.String())
+		}
+		second := doReq(t, srv, "POST", "/v1/presence/heartbeat", body, tok, rid)
+		if second.Code != http.StatusConflict {
+			t.Fatalf("replayed heartbeat = %d, want 409", second.Code)
+		}
+		if decodeBody(t, second)["error"] != trust.CodeReplayedID {
+			t.Fatalf("replayed heartbeat code = %s", second.Body.String())
+		}
+	})
+
+	t.Run("attention", func(t *testing.T) {
+		srv, f := newTestServer()
+		uid, _, _, _ := bootstrapOwner(t, srv, "Owner")
+		cpPub, cpPriv := newKeypair(t)
+		subjectID, err := trust.DeviceIDForComputer(cpPub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fp, err := trust.FingerprintEd25519Pub(cpPub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.mu.Lock()
+		f.devices[subjectID] = store.Device{ID: subjectID, UserID: uid, Role: store.RoleComputer, DisplayName: "PC", PubKey: cpPub, Fingerprint: fp}
+		f.mu.Unlock()
+		compTok := authtoken(t, srv, subjectID, cpPriv)
+		rid := freshRID()
+		body := map[string]any{"computer_id": subjectID, "workflow_id": "wf-1", "kind": "approval_required"}
+		if first := doReq(t, srv, "POST", "/v1/notify/attention", body, compTok, rid); first.Code != http.StatusAccepted {
+			t.Fatalf("first attention = %d %s, want 202", first.Code, first.Body.String())
+		}
+		second := doReq(t, srv, "POST", "/v1/notify/attention", body, compTok, rid)
+		if second.Code != http.StatusConflict {
+			t.Fatalf("replayed attention = %d, want 409", second.Code)
+		}
+		if decodeBody(t, second)["error"] != trust.CodeReplayedID {
+			t.Fatalf("replayed attention code = %s", second.Body.String())
+		}
+	})
+
+	t.Run("push-token", func(t *testing.T) {
+		srv, _ := newTestServer()
+		_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+		tok := authtoken(t, srv, ownerID, ownerPriv)
+		rid := freshRID()
+		body := map[string]any{"platform": "apns", "push_token": "push-123"}
+		if first := doReq(t, srv, "POST", "/v1/devices/"+ownerID+"/push-token", body, tok, rid); first.Code != http.StatusOK {
+			t.Fatalf("first push-token = %d %s, want 200", first.Code, first.Body.String())
+		}
+		second := doReq(t, srv, "POST", "/v1/devices/"+ownerID+"/push-token", body, tok, rid)
+		if second.Code != http.StatusConflict {
+			t.Fatalf("replayed push-token = %d, want 409", second.Code)
+		}
+		if decodeBody(t, second)["error"] != trust.CodeReplayedID {
+			t.Fatalf("replayed push-token code = %s", second.Body.String())
+		}
+	})
+
+	t.Run("decision", func(t *testing.T) {
+		srv, _ := newTestServer()
+		_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+		tok := authtoken(t, srv, ownerID, ownerPriv)
+		sess := createSession(t, srv, tok)
+		sid := sess["session_id"].(string)
+		p2, _ := newKeypair(t)
+		joinSession(t, srv, sid, sess["qr_nonce"].(string), p2, "PC2")
+		rid := freshRID()
+		body := map[string]any{"approve": false, "subject_pubkey_b64": b64(p2)}
+		if first := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid+"/decision", body, tok, rid); first.Code != http.StatusOK {
+			t.Fatalf("first decision = %d %s, want 200", first.Code, first.Body.String())
+		}
+		second := doReq(t, srv, "POST", "/v1/pairing/sessions/"+sid+"/decision", body, tok, rid)
+		if second.Code != http.StatusConflict {
+			t.Fatalf("replayed decision = %d, want 409", second.Code)
+		}
+		if decodeBody(t, second)["error"] != trust.CodeReplayedID {
+			t.Fatalf("replayed decision code = %s", second.Body.String())
+		}
+	})
+}
+
+// Contract: unknown or garbage bearer tokens fail closed with 401-or-403 and
+// a generic code, never revealing whether the token or the device half
+// failed. Each subtest fails for exactly one reason: auth must reject
+// without leaking existence.
+func TestUnknownOrGarbageTokensPerSurface(t *testing.T) {
+	srv, f := newTestServer()
+	uid, ownerID, _, _ := bootstrapOwner(t, srv, "Owner")
+	ghostTok := "tok-ghost-wellformed-0001"
+	f.mu.Lock()
+	f.tokens[ghostTok] = tokRec{deviceID: "PH-GHOST-UNKNOWN", userID: uid, exp: time.Now().Add(time.Hour)}
+	f.mu.Unlock()
+
+	type surface struct {
+		name    string
+		method  string
+		path    string
+		body    map[string]any
+		needRID bool
+	}
+	surfaces := []surface{
+		{"devices list", "GET", "/v1/devices", nil, false},
+		{"trust graph", "GET", "/v1/trust/graph", nil, false},
+		{"presence get", "GET", "/v1/computers/" + ownerID + "/presence", nil, false},
+		{"attention post", "POST", "/v1/notify/attention", map[string]any{"computer_id": ownerID, "workflow_id": "wf-1", "kind": "approval_required"}, true},
+		{"revoke", "POST", "/v1/devices/" + ownerID + "/revoke", map[string]any{"reason": "lost"}, true},
+		{"pairing create", "POST", "/v1/pairing/sessions", map[string]any{}, true},
+	}
+	type tokCase struct {
+		name    string
+		token   string
+		wantErr string
+	}
+	tokCases := []tokCase{
+		{"no token", "", "MISSING_TOKEN"},
+		{"garbage token", "garbage-token-xyz", trust.CodeRevoked},
+		{"ghost token", ghostTok, trust.CodeRevoked},
+	}
+	for _, sf := range surfaces {
+		for _, tc := range tokCases {
+			sf, tc := sf, tc
+			t.Run(sf.name+"/"+tc.name, func(t *testing.T) {
+				rid := ""
+				if sf.needRID {
+					rid = freshRID()
+				}
+				rec := doReq(t, srv, sf.method, sf.path, sf.body, tc.token, rid)
+				if rec.Code != http.StatusUnauthorized && rec.Code != http.StatusForbidden {
+					t.Fatalf("%s %s = %d, want 401 or 403 (body %s)", sf.name, tc.name, rec.Code, rec.Body.String())
+				}
+				if got := decodeBody(t, rec)["error"]; got != tc.wantErr {
+					t.Fatalf("%s %s error = %v, want %s (body %s)", sf.name, tc.name, got, tc.wantErr, rec.Body.String())
+				}
+				if tc.token != "" && bytes.Contains(rec.Body.Bytes(), []byte(tc.token)) {
+					t.Fatalf("%s %s leaks token in body %s", sf.name, tc.name, rec.Body.String())
+				}
+				if bytes.Contains(rec.Body.Bytes(), []byte("PH-GHOST-UNKNOWN")) {
+					t.Fatalf("%s %s leaks device half in body %s", sf.name, tc.name, rec.Body.String())
+				}
+			})
+		}
+	}
+}
