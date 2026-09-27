@@ -532,3 +532,14 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Approval verdicts still persist as tiny allow or reject receipts. Needed for snapshot display, kept deliberately.
   - Backend side proven statically only here, no local Postgres or Redis. The canary run against live stores waits on CI plumbing or a local database.
 - **Status:** Implemented
+
+## DEC-041 revoked suites green
+- **Date/Context:** Sept 27 2026, one worker on append-only backend tests, local plus CI proof
+- **Context/What:** Two tests, 23 subtests, in `backend/api/server_test.go` only: replay rejected on revoke, heartbeat, attention, push token, and decision; unknown, garbage, and ghost tokens rejected on six surfaces without leaking which half failed.
+- **The "Why":** The P2 gate cases existed per endpoint but replay plus token coverage had holes everywhere else.
+- **Improvement over Previous Solution:** Replaced assumed coverage with named contracts, each failing for exactly one reason.
+- **Pros:**
+  - Green locally and in CI including live stores. Helpers untouched.
+- **Cons & Trade-offs:**
+  - Fake-level proof for the new cases; live-store replay already covered at the seam.
+- **Status:** Implemented
