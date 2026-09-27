@@ -1,0 +1,53 @@
+name: mobile-apk
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - 'proto/**'
+      - '.github/workflows/mobile-apk.yml'
+  workflow_dispatch:
+    inputs:
+      backend_url:
+        description: 'Backend base URL the phone calls'
+        required: false
+        default: ''
+      agent_url:
+        description: 'Agent base URL on the private mesh'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter --version
+      - run: yes | flutter doctor --android-licenses
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build debug APK
+        run: |
+          set -euo pipefail
+          BACKEND="${{ inputs.backend_url }}${{ vars.CALCAR_BACKEND_URL }}"
+          AGENT="${{ inputs.agent_url }}${{ vars.CALCAR_AGENT_URL }}"
+          ARGS="--debug"
+          if [ -n "$BACKEND" ]; then ARGS="$ARGS --dart-define=CALCAR_BACKEND_URL=$BACKEND"; fi
+          if [ -n "$AGENT" ]; then ARGS="$ARGS --dart-define=CALCAR_AGENT_URL=$AGENT"; fi
+          # shellcheck disable=SC2086
+          flutter build apk $ARGS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calcar-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
