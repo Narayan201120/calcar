@@ -64,7 +64,7 @@ CalcarApiClient _api({required int status}) {
   return CalcarApiClient(
     baseUrl: 'https://backend.test',
     httpClient: MockClient((http.Request request) async {
-      const Json = 'application/json';
+      const String jsonMime = 'application/json';
       if (status >= 400) {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -72,7 +72,7 @@ CalcarApiClient _api({required int status}) {
             'retryable': false,
           }),
           status,
-          headers: <String, String>{'Content-Type': Json},
+          headers: <String, String>{'Content-Type': jsonMime},
         );
       }
       final String path = request.url.path;
@@ -84,7 +84,7 @@ CalcarApiClient _api({required int status}) {
             'expires_in_seconds': 120,
           }),
           200,
-          headers: <String, String>{'Content-Type': Json},
+          headers: <String, String>{'Content-Type': jsonMime},
         );
       }
       if (path.endsWith('/v1/auth/verify')) {
@@ -95,7 +95,7 @@ CalcarApiClient _api({required int status}) {
             'expires_in_seconds': 86400,
           }),
           200,
-          headers: <String, String>{'Content-Type': Json},
+          headers: <String, String>{'Content-Type': jsonMime},
         );
       }
       return http.Response(
@@ -106,7 +106,7 @@ CalcarApiClient _api({required int status}) {
           'fingerprint': 'FP',
         }),
         status,
-        headers: <String, String>{'Content-Type': Json},
+        headers: <String, String>{'Content-Type': jsonMime},
       );
     }),
   );
