@@ -125,12 +125,14 @@ class UpdateController extends StateNotifier<UpdateState> {
       return;
     }
     _dropStaged();
-    _emit(state.copyWith(
-      status: UpdateStatus.checking,
-      error: '',
-      clearTarget: true,
-      apkPath: '',
-    ));
+    _emit(
+      state.copyWith(
+        status: UpdateStatus.checking,
+        error: '',
+        clearTarget: true,
+        apkPath: '',
+      ),
+    );
     try {
       final UpdateManifest manifest = await _fetchManifest();
       final int current = await _readCurrentCode();
@@ -138,27 +140,33 @@ class UpdateController extends StateNotifier<UpdateState> {
         throw const FormatException('installed versionCode is invalid');
       }
       if (manifest.updateAvailable(current)) {
-        _emit(state.copyWith(
-          status: UpdateStatus.updateAvailable,
-          currentCode: current,
-          latest: manifest.latest,
-          previous: manifest.previous,
-          clearPrevious: manifest.previous == null,
-        ));
+        _emit(
+          state.copyWith(
+            status: UpdateStatus.updateAvailable,
+            currentCode: current,
+            latest: manifest.latest,
+            previous: manifest.previous,
+            clearPrevious: manifest.previous == null,
+          ),
+        );
       } else {
-        _emit(state.copyWith(
-          status: UpdateStatus.upToDate,
-          currentCode: current,
-          latest: manifest.latest,
-          previous: manifest.previous,
-          clearPrevious: manifest.previous == null,
-        ));
+        _emit(
+          state.copyWith(
+            status: UpdateStatus.upToDate,
+            currentCode: current,
+            latest: manifest.latest,
+            previous: manifest.previous,
+            clearPrevious: manifest.previous == null,
+          ),
+        );
       }
     } on Object catch (error) {
-      _emit(state.copyWith(
-        status: UpdateStatus.error,
-        error: '$error',
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.error,
+          error: '$error',
+        ),
+      );
     }
   }
 
@@ -176,29 +184,35 @@ class UpdateController extends StateNotifier<UpdateState> {
     final UpdateRelease? target =
         latest ? state.latest : state.previous;
     if (target == null) {
-      _emit(state.copyWith(
-        status: UpdateStatus.error,
-        error: latest
-            ? 'Check for updates first.'
-            : 'No previous release available.',
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.error,
+          error: latest
+              ? 'Check for updates first.'
+              : 'No previous release available.',
+        ),
+      );
       return;
     }
     final int? current = state.currentCode;
     if (!latest && current != null && target.versionCode >= current) {
-      _emit(state.copyWith(
-        status: UpdateStatus.error,
-        error: 'No previous release available.',
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.error,
+          error: 'No previous release available.',
+        ),
+      );
       return;
     }
     _dropStaged();
-    _emit(state.copyWith(
-      status: UpdateStatus.downloading,
-      error: '',
-      clearTarget: true,
-      apkPath: '',
-    ));
+    _emit(
+      state.copyWith(
+        status: UpdateStatus.downloading,
+        error: '',
+        clearTarget: true,
+        apkPath: '',
+      ),
+    );
     try {
       final File apk = await _downloadApk(target);
       try {
@@ -214,16 +228,20 @@ class UpdateController extends StateNotifier<UpdateState> {
         }
         rethrow;
       }
-      _emit(state.copyWith(
-        status: UpdateStatus.readyToInstall,
-        apkPath: apk.path,
-        targetCode: target.versionCode,
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.readyToInstall,
+          apkPath: apk.path,
+          targetCode: target.versionCode,
+        ),
+      );
     } on Object catch (error) {
-      _emit(state.copyWith(
-        status: UpdateStatus.error,
-        error: '$error',
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.error,
+          error: '$error',
+        ),
+      );
     }
   }
 
@@ -238,12 +256,14 @@ class UpdateController extends StateNotifier<UpdateState> {
     if (result.outcome == ApkInstallOutcome.opened) {
       _emit(state.copyWith(status: UpdateStatus.waitingInstaller));
     } else {
-      _emit(state.copyWith(
-        status: UpdateStatus.error,
-        error: result.detail.isEmpty
-            ? 'The installer refused the file.'
-            : result.detail,
-      ));
+      _emit(
+        state.copyWith(
+          status: UpdateStatus.error,
+          error: result.detail.isEmpty
+              ? 'The installer refused the file.'
+              : result.detail,
+        ),
+      );
     }
   }
 
@@ -273,7 +293,7 @@ final updateControllerProvider =
       fetchManifest: () async {
         final http.Client client = http.Client();
         try {
-          return fetchUpdateManifest(
+          return await fetchUpdateManifest(
             client,
             Uri.parse(kUpdateManifestUrl),
           );

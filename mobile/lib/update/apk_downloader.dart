@@ -46,7 +46,7 @@ Future<File> downloadApk({
       );
     }
     if (response.bodyBytes.isEmpty) {
-      throw const StateError('downloaded APK is empty');
+      throw StateError('downloaded APK is empty');
     }
     final Directory dir = await directoryProvider();
     for (final FileSystemEntity entry in dir.listSync()) {
@@ -76,11 +76,11 @@ Future<File> downloadApk({
 /// on mismatch so it can never be installed later by accident.
 Future<void> verifyApkSha256(File apk, String expectedSha256) async {
   if (!apk.existsSync()) {
-    throw const StateError('staged APK is missing');
+    throw StateError('staged APK is missing');
   }
   final List<int> bytes = await apk.readAsBytes();
   if (bytes.isEmpty) {
-    throw const StateError('staged APK is empty or corrupt');
+    throw StateError('staged APK is empty or corrupt');
   }
   final String actual = sha256Hex(bytes);
   if (actual != expectedSha256.toLowerCase()) {
