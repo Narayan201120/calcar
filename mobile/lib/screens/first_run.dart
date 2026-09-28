@@ -166,6 +166,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
         return ComputersScreen(
           onAddComputer: () =>
               Navigator.of(context).pushNamed('/add-computer'),
+          onOpenUpdate: () =>
+              Navigator.of(context).pushNamed('/update'),
         );
     }
   }

@@ -47,6 +47,12 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
         title: const Text('My Computers'),
         actions: <Widget>[
           IconButton(
+            key: const ValueKey('computers-update'),
+            icon: const Icon(Icons.system_update),
+            tooltip: 'App updates',
+            onPressed: () => Navigator.of(context).pushNamed('/update'),
+          ),
+          IconButton(
             key: const ValueKey('computers-add'),
             icon: const Icon(Icons.add),
             tooltip: 'Add Computer',
@@ -94,6 +100,7 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
     }
     return ComputersScreen(
       onAddComputer: () => Navigator.of(context).pushNamed('/add-computer'),
+      onOpenUpdate: () => Navigator.of(context).pushNamed('/update'),
     );
   }
 

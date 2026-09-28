@@ -27,12 +27,12 @@ import 'dart:async';
 
 import 'package:calcar/api/api.dart';
 import 'package:calcar/screens/first_run.dart';
-import 'package:calcar/screens/wired/wired_add_computer.dart';
-import 'package:calcar/screens/wired/wired_computer_detail.dart';
+import 'package:calcar/screens/wired/wired_add_computer.dart';import 'package:calcar/screens/wired/wired_computer_detail.dart';
 import 'package:calcar/screens/wired/wired_computers.dart';
 import 'package:calcar/screens/wired/wired_devices.dart';
 import 'package:calcar/screens/wired/wired_workflow_view.dart';
 import 'package:calcar/state/state.dart';
+import 'package:calcar/update/update_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -266,6 +266,9 @@ class AppRoutes {
   /// Add Computer, single use pairing flow.
   static const String addComputer = '/add-computer';
 
+  /// Manual APK update plus one-level rollback.
+  static const String appUpdate = '/update';
+
   /// Owner establish, then the lock, then the empty list.
   static const String firstRun = '/first-run';
 
@@ -312,6 +315,9 @@ class AppRoutes {
         settings,
         const RealtimeScope(child: WiredAddComputerScreen()),
       );
+    }
+    if (routeName == appUpdate) {
+      return _page(settings, const UpdateScreen());
     }
     if (routeName == firstRun) {
       return _page(settings, _firstRunView(deps));

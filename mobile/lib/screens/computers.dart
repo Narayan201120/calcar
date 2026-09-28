@@ -8,7 +8,10 @@ class ComputersScreen extends StatelessWidget {
   /// rather than silently doing nothing, so missing wiring fails visibly.
   final VoidCallback? onAddComputer;
 
-  const ComputersScreen({super.key, this.onAddComputer});
+  /// Opens the manual app update screen. Same null rule as above.
+  final VoidCallback? onOpenUpdate;
+
+  const ComputersScreen({super.key, this.onAddComputer, this.onOpenUpdate});
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +26,11 @@ class ComputersScreen extends StatelessWidget {
             FilledButton(
               onPressed: onAddComputer,
               child: const Text('Add Computer'),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: onOpenUpdate,
+              child: const Text('Check for app updates'),
             ),
           ],
         ),

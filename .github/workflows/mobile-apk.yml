@@ -16,6 +16,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -53,17 +56,119 @@ jobs:
           grep -q FlutterFragmentActivity "$ACT"
           MAN=android/app/src/main/AndroidManifest.xml
           grep -q USE_BIOMETRIC "$MAN" || sed -i '/<application/ i \    <uses-permission android:name="android.permission.USE_BIOMETRIC"\/>' "$MAN"
+          # The manual updater hands a verified APK to the OS installer.
+          # open_filex removed REQUEST_INSTALL_PACKAGES for Play policy;
+          # this dev updater needs it declared to open the installer sheet.
+          grep -q REQUEST_INSTALL_PACKAGES "$MAN" || sed -i '/<application/ i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"\/>' "$MAN"
           cat "$ACT"
+      - name: Pin shared debug signing identity
+        run: |
+          set -euo pipefail
+          # Every CI runner generates its own ~/.android/debug.keystore on
+          # first use, which would give each build a different signing
+          # identity and make Android refuse updates as incompatible.
+          # Copy the committed dev key so all CI APKs share one identity.
+          # This key is development only and public by design.
+          test -f debug.keystore
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+          chmod 600 ~/.android/debug.keystore
       - name: Build debug APK
         run: |
           set -euo pipefail
           BACKEND="${{ inputs.backend_url }}${{ vars.CALCAR_BACKEND_URL }}"
           AGENT="${{ inputs.agent_url }}${{ vars.CALCAR_AGENT_URL }}"
-          ARGS="--debug"
+          ARGS="--debug --build-number=${{ github.run_number }}"
           if [ -n "$BACKEND" ]; then ARGS="$ARGS --dart-define=CALCAR_BACKEND_URL=$BACKEND"; fi
           if [ -n "$AGENT" ]; then ARGS="$ARGS --dart-define=CALCAR_AGENT_URL=$AGENT"; fi
           # shellcheck disable=SC2086
           flutter build apk $ARGS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BACKEND="${{ inputs.backend_url }}${{ vars.CALCAR_BACKEND_URL }}"
+          if [ -z "$BACKEND" ]; then
+            echo "no backend_url: artifact only, no release, so the updater never serves a localhost build"
+            exit 0
+          fi
+          RUN="${{ github.run_number }}"
+          TAG="mobile-${RUN}"
+          APK="build/app/outputs/flutter-apk/app-debug.apk"
+          test -f "$APK"
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists: never overwriting"
+            exit 0
+          fi
+          export REPO="${{ github.repository }}" RUN SHA
+          python3 - <<'EOF'
+          import json
+          import os
+          import subprocess
+          import urllib.request
+          repo = os.environ["REPO"]
+          run = int(os.environ["RUN"])
+          sha = os.environ["SHA"]
+          version_name = "0.1.0+" + str(run)
+          apk_url = (
+              "https://github.com/" + repo +
+              "/releases/download/mobile-" + str(run) + "/calcar.apk"
+          )
+          out = subprocess.run(
+              ["gh", "api", "repos/" + repo + "/releases?per_page=100"],
+              capture_output=True, text=True, check=True,
+          )
+          releases = json.loads(out.stdout)
+          prev = 0
+          for item in releases:
+              tag = item.get("tag_name", "")
+              if tag.startswith("mobile-") and tag[7:].isdigit():
+                  num = int(tag[7:])
+                  if num < run and num > prev:
+                      prev = num
+          previous = None
+          if prev > 0:
+              prev_url = (
+                  "https://github.com/" + repo +
+                  "/releases/download/mobile-" + str(prev) + "/update.json"
+              )
+              try:
+                  with urllib.request.urlopen(prev_url, timeout=30) as resp:
+                      prev_manifest = json.loads(resp.read().decode("utf-8"))
+                  prev_latest = prev_manifest["latest"]
+                  previous = {
+                      "versionCode": int(prev_latest["versionCode"]),
+                      "versionName": str(prev_latest["versionName"]),
+                      "apkUrl": str(prev_latest["apkUrl"]),
+                      "sha256": str(prev_latest["sha256"]),
+                  }
+              except Exception as exc:
+                  print("warning: previous update.json unreadable: " + str(exc))
+                  previous = None
+          manifest = {
+              "latest": {
+                  "versionCode": run,
+                  "versionName": version_name,
+                  "apkUrl": apk_url,
+                  "sha256": sha,
+              },
+              "previous": previous,
+          }
+          with open("/tmp/update.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2)
+              handle.write("\n")
+          print("previous run: " + (str(prev) if prev > 0 else "none"))
+          EOF
+          cp "$APK" /tmp/calcar.apk
+          BT=$(echo "$ANDROID_HOME/build-tools/"*/apksigner | tr ' ' '\n' | sort | tail -n 1)
+          if [ -x "$BT" ]; then
+            "$BT" verify --print-certs /tmp/calcar.apk | head -n 4 || true
+          fi
+          gh release create "$TAG" /tmp/calcar.apk /tmp/update.json \
+            --title "Calcar mobile-${RUN}" \
+            --notes "Dev debug build versionCode ${RUN}, SHA-256 ${SHA}. Same shared debug signing identity as all CI builds."
       - uses: actions/upload-artifact@v4
         with:
           name: calcar-debug-apk

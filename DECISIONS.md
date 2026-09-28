@@ -596,3 +596,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Token plus device id live in memory only. An app restart today returns to first run against a backend that may still hold the old Owner. Persistent session storage stays open.
   - Phones established by the previous build hold a key and a registration but no token. They must run Create Owner once more on the new build.
 - **Status:** Implemented
+
+## DEC-046 Manual self-update plus one-level rollback from GitHub Releases
+- **Date/Context:** Sept 28 2026, user spec for a manual dev updater with run-number versioning and explicit previous release
+- **Context/What:** New `mobile/lib/update/` module with manifest parsing, SHA-256 gated downloader, OS installer sheet behind a seam, and a Riverpod state machine, plus an Update screen on route `/update` reached from the main screen. New `mobile/test/update_manifest_test.dart` plus `update_service_test.dart` written against failure modes first, covering parse, compare, checksum, both flows, and installer faults with no real network. New `mobile/debug.keystore` committed so CI signs every build with one dev identity. `mobile-apk.yml` builds with `--build-number github.run_number`, publishes `mobile-<run>` releases with `calcar.apk` plus `update.json` holding explicit latest and previous, and keeps the artifact upload plus backend and agent inputs.
+- **The "Why":** Phone installs cost a manual artifact hunt today. The updater must never derive previous as current minus one because failed runs leave gaps, and must never install an unverified file.
+- **Improvement over Previous Solution:** Replaced artifact hunting with check, download, verify, OS confirm, plus a manifest-resolved rollback.
+- **Pros:**
+  - Manifest lives at a stable releases/latest URL, no database or server.
+  - Check downloads nothing, mismatch deletes the file before any install, buttons disable while busy.
+- **Cons & Trade-offs:**
+  - Release publishing is gated on addressed builds with backend_url set, so localhost-default push builds stay artifact only and never become latest.
+  - Blind Dart throughout, CI arbitrates new plugin versions and manifest merge.
+  - Update screen is one tap from main rather than inline state, and session persistence stays in memory only.
+- **Status:** Implemented
