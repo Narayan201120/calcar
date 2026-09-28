@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:calcar/api/api.dart';
 import 'package:calcar/keys/owner_keys.dart';
