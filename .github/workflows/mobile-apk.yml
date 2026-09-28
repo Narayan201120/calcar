@@ -187,10 +187,11 @@ jobs:
           fi
           # Signing gate: the APK must carry the shared dev identity, or
           # Android will refuse it as an update. Fail loudly instead of
-          # publishing an uninstallable release.
-          EXPECTED="3B:1C:12:6E:40:D2:D7:8B:2C:E6:E8:8B:CE:C4:55:9A:4F:13:D3:40:A8:D5:B2:ED:94:1F:45:DF:4B:F0:D8:B4"
+          # publishing an uninstallable release. apksigner print formats
+          # vary by version, so both sides compare colonless lowercase.
+          EXPECTED="3b1c126e40d2d78b2ce6e88bcec4559a4f13d340a8d5b2ed941f45df4bf0d8b4"
           if [ -x "$BT" ]; then
-            ACTUAL=$("$BT" verify --print-certs /tmp/calcar.apk | grep -m 1 -o '[0-9A-F:]\{59,\}' || true)
+            ACTUAL=$("$BT" verify --print-certs /tmp/calcar.apk | grep -i 'SHA-256 digest' | grep -oiE '[0-9a-f:]\{32,\}' | head -n 1 | tr -d ':' | tr 'A-Z' 'a-z' || true)
             if [ "$ACTUAL" != "$EXPECTED" ]; then
               echo "signing identity mismatch: got ${ACTUAL:-none}, want $EXPECTED"
               exit 1
