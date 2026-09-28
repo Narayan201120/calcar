@@ -583,3 +583,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - First-run ready still renders the bare empty screen instead of the full shell list. Full shell handoff after unlock stays open.
   - Tapping Add before any session token exists still depends on the pairing calls the wired screen owns. Auth gaps there surface next on glass.
 - **Status:** Implemented
+
+## DEC-045 Owner setup must log in after bootstrap
+- **Date/Context:** Sept 28 2026, phone report of ApiException 401 MISSING_TOKEN on Create session after Owner setup passed
+- **Context/What:** `establishOwner` ran biometric unlock plus key generate plus bootstrap and returned true, but bootstrap mints no token by design. The challenge plus verify login that mints the 24h bearer never ran, so `CalcarApiClient.token` stayed null and the first authed call failed. Changed `mobile/lib/onboarding/owner_setup.dart` to challenge the fresh device id, sign the challenge bytes with the key just generated, and verify, which stores the token on the same client the providers share. Updated `mobile/test/owner_setup_test.dart` mock to serve challenge plus verify and pinned the stored token.
+- **The "Why":** Registration without login is a registered phone that cannot call anything. The error named the gap exactly, and the fix is the documented auth sequence, not a backend exception.
+- **Improvement over Previous Solution:** Replaced setup ending at registration with setup ending at a logged-in client ready to create a pairing session.
+- **Pros:**
+  - Same-run flow now works: Create Owner then Add Computer then Create session on one token.
+  - Login failure still deletes the key, so no registered-but-unusable Owner lingers.
+- **Cons & Trade-offs:**
+  - Token plus device id live in memory only. An app restart today returns to first run against a backend that may still hold the old Owner. Persistent session storage stays open.
+  - Phones established by the previous build hold a key and a registration but no token. They must run Create Owner once more on the new build.
+- **Status:** Implemented

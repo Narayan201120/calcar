@@ -64,6 +64,7 @@ CalcarApiClient _api({required int status}) {
   return CalcarApiClient(
     baseUrl: 'https://backend.test',
     httpClient: MockClient((http.Request request) async {
+      const Json = 'application/json';
       if (status >= 400) {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -71,7 +72,30 @@ CalcarApiClient _api({required int status}) {
             'retryable': false,
           }),
           status,
-          headers: <String, String>{'Content-Type': 'application/json'},
+          headers: <String, String>{'Content-Type': Json},
+        );
+      }
+      final String path = request.url.path;
+      if (path.endsWith('/v1/auth/challenge')) {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'device_id': 'PH-1',
+            'challenge': 'ch-abc-123',
+            'expires_in_seconds': 120,
+          }),
+          200,
+          headers: <String, String>{'Content-Type': Json},
+        );
+      }
+      if (path.endsWith('/v1/auth/verify')) {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'access_token': 'tok-owner-1',
+            'token_type': 'bearer',
+            'expires_in_seconds': 86400,
+          }),
+          200,
+          headers: <String, String>{'Content-Type': Json},
         );
       }
       return http.Response(
@@ -82,7 +106,7 @@ CalcarApiClient _api({required int status}) {
           'fingerprint': 'FP',
         }),
         status,
-        headers: <String, String>{'Content-Type': 'application/json'},
+        headers: <String, String>{'Content-Type': Json},
       );
     }),
   );
@@ -91,21 +115,23 @@ CalcarApiClient _api({required int status}) {
 void main() {
   group('establish owner', () {
     test(
-      'contract: unlock then key then bootstrap, in that order',
+      'contract: unlock then key then bootstrap then login, in that order',
       () async {
         final _Keys keys = _Keys();
         final _Gate gate = _Gate(LocalAuthResult.unlocked);
+        final CalcarApiClient api = _api(status: 201);
         final bool ok = await establishOwner(
           displayName: 'Owner',
           keys: keys,
           gate: gate,
-          api: _api(status: 201),
+          api: api,
           requestId: 'req-1',
         );
         expect(ok, isTrue);
         expect(gate.calls, 1);
         expect(keys.calls, <String>['generate']);
         expect(await keys.hasKey(), isTrue);
+        expect(api.token, 'tok-owner-1');
       },
     );
 
