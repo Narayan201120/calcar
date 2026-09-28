@@ -38,9 +38,14 @@ class UpdateScreen extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 16),
-            if (state.status == UpdateStatus.checking ||
-                state.status == UpdateStatus.downloading) ...<Widget>[
+            if (state.status == UpdateStatus.checking) ...<Widget>[
               const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+            ],
+            if (state.status == UpdateStatus.downloading) ...<Widget>[
+              LinearProgressIndicator(value: state.progress),
+              const SizedBox(height: 8),
+              Text(_percent(state.progress)),
               const SizedBox(height: 16),
             ],
             FilledButton(
@@ -82,8 +87,14 @@ class UpdateScreen extends ConsumerWidget {
     );
   }
 
-  String _headline(UpdateState state) {
-    switch (state.status) {
+  String _percent(double? progress) {
+    if (progress == null) {
+      return 'Downloading...';
+    }
+    return 'Downloading ${(progress * 100).round()}%';
+  }
+
+  String _headline(UpdateState state) {    switch (state.status) {
       case UpdateStatus.idle:
         return 'Check whether a newer Calcar build is published.';
       case UpdateStatus.checking:

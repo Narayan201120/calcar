@@ -39,6 +39,9 @@ class UpdateState {
   final int? targetCode;
   final String error;
 
+  /// Download fraction 0 to 1, or null when the server gave no length.
+  final double? progress;
+
   const UpdateState({
     this.status = UpdateStatus.idle,
     this.currentCode,
@@ -47,6 +50,7 @@ class UpdateState {
     this.apkPath = '',
     this.targetCode,
     this.error = '',
+    this.progress,
   });
 
   bool get busy {
@@ -70,6 +74,8 @@ class UpdateState {
     int? targetCode,
     bool clearTarget = false,
     String? error,
+    double? progress,
+    bool clearProgress = false,
   }) {
     return UpdateState(
       status: status ?? this.status,
@@ -79,13 +85,17 @@ class UpdateState {
       apkPath: apkPath ?? this.apkPath,
       targetCode: clearTarget ? null : (targetCode ?? this.targetCode),
       error: error ?? this.error,
+      progress: clearProgress ? null : (progress ?? this.progress),
     );
   }
 }
 
 typedef FetchManifestFn = Future<UpdateManifest> Function();
 typedef ReadCurrentCodeFn = Future<int> Function();
-typedef DownloadApkFn = Future<File> Function(UpdateRelease release);
+typedef DownloadApkFn = Future<File> Function(
+  UpdateRelease release,
+  DownloadProgress onProgress,
+);
 
 class UpdateController extends StateNotifier<UpdateState> {
   UpdateController({
@@ -131,6 +141,7 @@ class UpdateController extends StateNotifier<UpdateState> {
         error: '',
         clearTarget: true,
         apkPath: '',
+        clearProgress: true,
       ),
     );
     try {
@@ -211,10 +222,25 @@ class UpdateController extends StateNotifier<UpdateState> {
         error: '',
         clearTarget: true,
         apkPath: '',
+        clearProgress: true,
       ),
     );
+    double lastReported = -1;
     try {
-      final File apk = await _downloadApk(target);
+      final File apk = await _downloadApk(target, (int received, int? total) {
+        final double? fraction = total == null || total <= 0
+            ? null
+            : received / total;
+        if (fraction == null) {
+          return;
+        }
+        // One emit per percent point: chunk callbacks fire far faster
+        // than the screen can usefully repaint.
+        if (fraction - lastReported >= 0.01 || fraction >= 1) {
+          lastReported = fraction;
+          _emit(state.copyWith(progress: fraction));
+        }
+      });
       try {
         await verifyApkSha256(apk, target.sha256);
       } on Object catch (_) {
@@ -305,10 +331,11 @@ final updateControllerProvider =
         final PackageInfo info = await PackageInfo.fromPlatform();
         return int.tryParse(info.buildNumber) ?? 0;
       },
-      downloadApk: (UpdateRelease release) {
+      downloadApk: (UpdateRelease release, DownloadProgress onProgress) {
         return downloadApk(
           apkUrl: release.apkUrl,
           versionCode: release.versionCode,
+          onProgress: onProgress,
         );
       },
       installer: const OpenFilexApkInstaller(),

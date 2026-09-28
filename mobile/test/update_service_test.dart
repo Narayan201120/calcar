@@ -60,7 +60,7 @@ UpdateController _controller({
     },
     readCurrentCode: () async => currentCode,
     downloadApk: download ??
-        (UpdateRelease release) async {
+        (UpdateRelease release, DownloadProgress onProgress) async {
           final Directory dir =
               await Directory.systemTemp.createTemp('calcar-update-test');
           final File file = File('${dir.path}/calcar-update.apk');
@@ -155,6 +155,34 @@ void main() {
         );
       },
     );
+
+    test(
+      'contract: streamed download reports progress and writes the file',
+      () async {
+        final http.Client client = MockClient(
+          (http.Request request) async => http.Response('test', 200),
+        );
+        final List<String> events = <String>[];
+        final Directory dir =
+            await Directory.systemTemp.createTemp('calcar-prog-test');
+        final File file = await downloadApk(
+          apkUrl: 'https://example.com/calcar.apk',
+          versionCode: 99,
+          client: client,
+          directoryProvider: () async => dir,
+          onProgress: (int received, int? total) {
+            events.add('$received/$total');
+          },
+        );
+        expect(file.existsSync(), isTrue);
+        expect(events, isNotEmpty);
+        expect(events.last, '4/4');
+        await verifyApkSha256(
+          file,
+          '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+        );
+      },
+    );
   });
 
   group('update flow', () {
@@ -164,7 +192,7 @@ void main() {
         int downloads = 0;
         final UpdateController controller = _controller(
           currentCode: 16,
-          download: (UpdateRelease release) async {
+          download: (UpdateRelease release, DownloadProgress onProgress) async {
             downloads += 1;
             throw StateError('must not download on check');
           },
@@ -225,7 +253,7 @@ void main() {
         );
         final UpdateController controller = _controller(
           installer: installer,
-          download: (UpdateRelease release) async {
+          download: (UpdateRelease release, DownloadProgress onProgress) async {
             final Directory dir =
                 await Directory.systemTemp.createTemp('calcar-update-test');
             final File file = File('${dir.path}/calcar-update.apk');
@@ -285,7 +313,7 @@ void main() {
         final UpdateController controller = UpdateController(
           fetchManifest: () async => UpdateManifest.parse(rollbackBody),
           readCurrentCode: () async => 18,
-          downloadApk: (UpdateRelease release) async {
+          downloadApk: (UpdateRelease release, DownloadProgress onProgress) async {
             final Directory dir =
                 await Directory.systemTemp.createTemp('calcar-rb-test');
             final File file = File('${dir.path}/calcar-update.apk');
