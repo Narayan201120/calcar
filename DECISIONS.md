@@ -636,3 +636,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - New pure-Dart dependency only, no native code, CI arbitrates the version.
   - No PC scanner exists yet, so scanability is proven by image presence, not glass.
 - **Status:** Implemented
+
+## DEC-049 App logo from a committed source
+- **Date/Context:** Sept 28 2026, user supplied an 887px PNG mark
+- **Context/What:** Logo lives at `mobile/assets/logo.png` and appears small on the Owner setup form. Launcher icons generate in CI from it via `flutter_launcher_icons` during the scaffold step, since `android/` is gitignored and regenerated every build. Adaptive background set to near-black to blend with the mark.
+- **The "Why":** Anything placed in `android/` directly is wiped by the scaffold. The committed PNG is the only durable source.
+- **Improvement over Previous Solution:** Replaced the default Flutter icon with the Calcar mark on launchers plus setup.
+- **Pros:**
+  - No new native code, one dev dependency, CI arbitrates.
+- **Cons & Trade-offs:**
+  - Source is 887px, not 1024, scaled up slightly by the generator.
+  - Adaptive background hex is eyeballed from the mark, not sampled.
+- **Status:** Implemented

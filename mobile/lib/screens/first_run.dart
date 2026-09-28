@@ -181,6 +181,13 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            Image.asset(
+              'assets/logo.png',
+              key: const ValueKey('first-run-logo'),
+              width: 72,
+              height: 72,
+            ),
+            const SizedBox(height: 8),
             const Text(
               'This phone becomes the Owner. It is the only device that '
               'can approve a computer.',

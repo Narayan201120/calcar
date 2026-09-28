@@ -61,6 +61,12 @@ jobs:
           # this dev updater needs it declared to open the installer sheet.
           grep -q REQUEST_INSTALL_PACKAGES "$MAN" || sed -i '/<application/ i \    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"\/>' "$MAN"
           cat "$ACT"
+      - name: Generate launcher icons
+        run: |
+          set -euo pipefail
+          # android/ is a fresh scaffold, so icons generate every build
+          # from the committed logo. Needs pub get first, done above.
+          dart run flutter_launcher_icons
       - name: Pin shared debug signing identity
         run: |
           set -euo pipefail
