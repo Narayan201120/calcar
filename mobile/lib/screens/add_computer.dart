@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 /// Single-use pairing flow stage. Sessions expire and cannot be reused,
 /// so there is no transition back to an earlier stage.
@@ -37,6 +38,7 @@ class AddComputerScreen extends StatelessWidget {
     required this.stage,
     this.sessionId,
     this.qrNonce,
+    this.qrPayload,
     this.remaining = Duration.zero,
     this.joinDisplayName,
     this.joinFingerprint,
@@ -55,6 +57,10 @@ class AddComputerScreen extends StatelessWidget {
 
   /// Session reference carried by the QR. QR never equals trust.
   final String? qrNonce;
+
+  /// Prebuilt pairing URI for the QR image, spec section 3. Null keeps
+  /// the legacy nonce text, so constructor-only tests still paint.
+  final String? qrPayload;
 
   /// Time left before the session TTL consumes it.
   final Duration remaining;
@@ -128,7 +134,13 @@ class AddComputerScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border.all(),
               ),
-              child: Text('QR: ${qrNonce ?? ''}'),
+              child: qrPayload != null && qrPayload!.isNotEmpty
+                  ? QrImageView(
+                      data: qrPayload!,
+                      version: QrVersions.auto,
+                      size: 220,
+                    )
+                  : Text('QR: ${qrNonce ?? ''}'),
             ),
             const SizedBox(height: 8),
             if (sessionId != null) Text('Session: $sessionId'),

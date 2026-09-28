@@ -132,6 +132,7 @@ void main() {
         expect(keys.calls, <String>['generate']);
         expect(await keys.hasKey(), isTrue);
         expect(api.token, 'tok-owner-1');
+        expect(api.deviceId, 'PH-1');
       },
     );
 

@@ -52,6 +52,7 @@ Future<bool> establishOwner({
       challenge: ch.challenge,
       signatureB64: base64Encode(sig),
     );
+    api.deviceId = boot.deviceId;
     return true;
   } on Object catch (_) {
     await keys.deleteKey();

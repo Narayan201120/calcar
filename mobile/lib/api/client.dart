@@ -20,6 +20,10 @@ class CalcarApiClient {
   /// Current bearer token, null when logged out.
   String? token;
 
+  /// This phone's device id from bootstrap or verify, empty until Owner
+  /// setup completes. Routing hint for the pairing QR, never proof.
+  String deviceId = '';
+
   CalcarApiClient({
     required String baseUrl,
     http.Client? httpClient,

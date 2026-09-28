@@ -623,3 +623,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Releases 21 and 22 can never update into each other. The first pinned release needs a fresh install.
   - The expected fingerprint is hardcoded in CI against a public dev key, acceptable only because production signing stays out of scope.
 - **Status:** Implemented
+
+## DEC-048 Scannable pairing QR per spec section 3
+- **Date/Context:** Sept 28 2026, phone showed the nonce as text where a scannable QR belongs
+- **Context/What:** The QR stage rendered `QR: <nonce>` text, closing the P6 QR art gap with `qr_flutter` plus a pure `buildPairingUri` helper encoding exactly `calcar://pair/v1?s=&r=&n=&o=&v=1`. The wired screen builds the payload from the live session, the api base URL as rendezvous, and the Owner device id, which `CalcarApiClient` now keeps after bootstrap. The screen renders the image when a payload exists and keeps the legacy text otherwise, so old constructor-only tests still paint.
+- **The "Why":** A nonce the PC cannot scan is not a pairing flow. The payload shape is spec, not style, and blank fields throw instead of encoding a half URI.
+- **Improvement over Previous Solution:** Replaced display text with a camera-readable code carrying the session, rendezvous, nonce, and Owner hint.
+- **Pros:**
+  - Pure builder pinned by fixed vectors, image presence asserted by widget test.
+  - Dev rendezvous stays http over the tailnet truthfully; the spec https check belongs to the future PC scanner, noted as an assumption.
+- **Cons & Trade-offs:**
+  - New pure-Dart dependency only, no native code, CI arbitrates the version.
+  - No PC scanner exists yet, so scanability is proven by image presence, not glass.
+- **Status:** Implemented

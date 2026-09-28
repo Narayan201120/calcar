@@ -7,8 +7,11 @@
 // session is never reused.
 import 'dart:async';
 
+import 'package:calcar/api/api.dart';
+import 'package:calcar/pairing/qr_payload.dart';
 import 'package:calcar/screens/add_computer.dart';
 import 'package:calcar/screens/wired/add_computer_controller.dart';
+import 'package:calcar/screens/wired/wired_transport.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,11 +82,13 @@ class _WiredAddComputerScreenState
         ref.watch(addComputerControllerProvider(widget.flowId));
     final AddComputerController controller =
         ref.read(addComputerControllerProvider(widget.flowId).notifier);
+    final CalcarApiClient api = ref.watch(apiClientProvider);
     final bool idle = !state.busy && !state.deciding;
     return AddComputerScreen(
       stage: state.stage,
       sessionId: state.sessionId.isEmpty ? null : state.sessionId,
       qrNonce: state.qrNonce.isEmpty ? null : state.qrNonce,
+      qrPayload: _pairingUri(api, state),
       remaining: _remaining(state),
       joinDisplayName: state.join?.displayName,
       joinFingerprint: state.join?.fingerprint,
@@ -105,6 +110,28 @@ class _WiredAddComputerScreenState
           ? () => unawaited(controller.createSession())
           : null,
     );
+  }
+
+  /// Pairing URI for the QR image, spec section 3. Null until the
+  /// session, the nonce, and this phone's device id are all known, in
+  /// which case the screen keeps the legacy nonce text.
+  String? _pairingUri(CalcarApiClient api, AddComputerState state) {
+    if (state.sessionId.isEmpty ||
+        state.qrNonce.isEmpty ||
+        api.deviceId.isEmpty) {
+      return null;
+    }
+    try {
+      return buildPairingUri(
+        sessionId: state.sessionId,
+        rendezvousUrl:
+            '${api.baseUrl}/v1/pairing/sessions/${Uri.encodeComponent(state.sessionId)}/join-request',
+        qrNonce: state.qrNonce,
+        ownerDeviceId: api.deviceId,
+      );
+    } on ArgumentError {
+      return null;
+    }
   }
 
   /// The pure screen has nowhere to put an error, so a failure rides a

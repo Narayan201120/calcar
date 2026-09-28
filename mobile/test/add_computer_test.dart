@@ -1,6 +1,7 @@
 import 'package:calcar/screens/add_computer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // P6 slice 3 gate: Add Computer walks single-use session states and never
 // reuses a session. Canned constructor data only, no providers, no clients.
@@ -63,6 +64,28 @@ void main() {
       expect(find.text('Expires in 09:07'), findsOneWidget);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Reject'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'contract: QR stage with a payload renders a scannable image',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AddComputerScreen(
+            stage: AddComputerStage.qr,
+            sessionId: 's-1',
+            qrNonce: 'qr-nonce-1',
+            qrPayload: 'calcar://pair/v1?s=s-1&r=https%3A%2F%2Fx%2Fy&n=qr-nonce-1&o=PH-1&v=1',
+            remaining: const Duration(minutes: 9, seconds: 7),
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('qr-placeholder')), findsOneWidget);
+      expect(find.byType(QrImageView), findsOneWidget);
+      expect(find.text('QR: qr-nonce-1'), findsNothing);
+      expect(find.text('Session: s-1'), findsOneWidget);
+      expect(find.text('Expires in 09:07'), findsOneWidget);
     },
   );
 
