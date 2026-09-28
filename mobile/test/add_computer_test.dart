@@ -71,13 +71,13 @@ void main() {
     'contract: QR stage with a payload renders a scannable image',
     (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: AddComputerScreen(
             stage: AddComputerStage.qr,
             sessionId: 's-1',
             qrNonce: 'qr-nonce-1',
             qrPayload: 'calcar://pair/v1?s=s-1&r=https%3A%2F%2Fx%2Fy&n=qr-nonce-1&o=PH-1&v=1',
-            remaining: const Duration(minutes: 9, seconds: 7),
+            remaining: Duration(minutes: 9, seconds: 7),
           ),
         ),
       );
