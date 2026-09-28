@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 /// Slice 1 shows the empty state only. Snapshot fetch plus Riverpod
 /// wiring lands with the backend client in slice 2.
 class ComputersScreen extends StatelessWidget {
-  const ComputersScreen({super.key});
+  /// Opens the single-use pairing flow. Null leaves the button disabled
+  /// rather than silently doing nothing, so missing wiring fails visibly.
+  final VoidCallback? onAddComputer;
+
+  const ComputersScreen({super.key, this.onAddComputer});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +21,7 @@ class ComputersScreen extends StatelessWidget {
             const Text('No computers yet'),
             const SizedBox(height: 8),
             FilledButton(
-              onPressed: () {},
+              onPressed: onAddComputer,
               child: const Text('Add Computer'),
             ),
           ],

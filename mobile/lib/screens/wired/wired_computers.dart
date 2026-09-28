@@ -43,7 +43,18 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
       return _coldList(state);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('My Computers')),
+      appBar: AppBar(
+        title: const Text('My Computers'),
+        actions: <Widget>[
+          IconButton(
+            key: const ValueKey('computers-add'),
+            icon: const Icon(Icons.add),
+            tooltip: 'Add Computer',
+            onPressed: () =>
+                Navigator.of(context).pushNamed('/add-computer'),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _pullRefresh,
         child: ListView.builder(
@@ -65,6 +76,8 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
   /// No managed computers yet. The pure screen owns that copy and the
   /// Add Computer affordance, so it is returned whole rather than
   /// retyped here. A failed fetch is not an empty list and says so.
+  /// The empty screen navigates to the single-use pairing route, which
+  /// the shell owns, so this wrapper never builds pairing state itself.
   Widget _coldList(DevicesState state) {
     if (state.loading) {
       return const Scaffold(
@@ -79,7 +92,9 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
         ),
       );
     }
-    return const ComputersScreen();
+    return ComputersScreen(
+      onAddComputer: () => Navigator.of(context).pushNamed('/add-computer'),
+    );
   }
 
   Widget _row(DevicesState state, Device device) {

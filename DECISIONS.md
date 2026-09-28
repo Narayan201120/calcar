@@ -570,3 +570,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Still patching a generated file in CI instead of committing `android/` to the tree. Template drift can break the sed match.
   - Generic failure text from DEC-042 still hides the step on glass. Surfaced errors remain the next fix.
 - **Status:** Implemented
+
+## DEC-044 Dead Add Computer button wired to the pairing route
+- **Date/Context:** Sept 28 2026, phone report that Owner setup passes on Android 13 but Add Computer does nothing
+- **Context/What:** `mobile/lib/screens/computers.dart` rendered the empty state with `onPressed: () {}`. `WiredComputersScreen._coldList` returned that screen with no callback, and `FirstRunScreen` ready stage returned a const empty screen with no shell behind it. Added an optional `onAddComputer` callback to the pure screen with null meaning disabled instead of a silent no-op, wired the empty state plus a list AppBar add action plus the first-run ready stage to `pushNamed('/add-computer')`, the route the shell already owns.
+- **The "Why":** The pairing flow existed behind `/add-computer` but no empty state reached it. A button that paints affordance and runs nothing reads as a broken app, so missing wiring must disable visibly instead.
+- **Improvement over Previous Solution:** Replaced a painted dead button with navigation to the existing single-use pairing screen on all three empty paths.
+- **Pros:**
+  - Existing widget tests keep passing since the callback is optional and they never tap Add.
+  - Route string is literal so no import cycle between the wired screen and the shell.
+- **Cons & Trade-offs:**
+  - First-run ready still renders the bare empty screen instead of the full shell list. Full shell handoff after unlock stays open.
+  - Tapping Add before any session token exists still depends on the pairing calls the wired screen owns. Auth gaps there surface next on glass.
+- **Status:** Implemented

@@ -161,7 +161,12 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
       case FirstRunStage.locked:
         return _lock();
       case FirstRunStage.ready:
-        return const ComputersScreen();
+        // First run has no shell route behind it, so the empty list must
+        // navigate to pairing itself instead of relying on the shell.
+        return ComputersScreen(
+          onAddComputer: () =>
+              Navigator.of(context).pushNamed('/add-computer'),
+        );
     }
   }
 
