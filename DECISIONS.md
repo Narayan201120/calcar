@@ -543,3 +543,30 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
 - **Cons & Trade-offs:**
   - Fake-level proof for the new cases; live-store replay already covered at the seam.
 - **Status:** Implemented
+
+## DEC-042 Owner keystore plus biometric gate plus setup flow
+- **Date/Context:** Sept 28 2026, P6 keystore round, solo build after three workers hit rate limits, commits 32fd6da plus 4b8345c
+- **Context/What:** Added `mobile/lib/keys/owner_keys.dart` with SeedStore seam plus SecureSeedStore plus Ed25519 generate plus sign plus fingerprint matching `backend/trust/trust.go:81`, `mobile/lib/auth/biometric_gate.dart` with pure classifyAttempt plus BiometricGate over local_auth, `mobile/lib/onboarding/owner_setup.dart` with unlock then generate then bootstrap plus delete on failure, wired both into `mobile/lib/main.dart:87-94`, added cryptography plus crypto plus flutter_secure_storage plus local_auth to `mobile/pubspec.yaml`, added 12 contract tests across owner_keys plus biometric_gate plus owner_setup.
+- **The "Why":** First run refused Owner setup by design until a real hardware-wrapped key plus biometric gate existed. Fingerprint format is contract with the backend, not style.
+- **Improvement over Previous Solution:** Replaced the fail-closed stub gate plus no-op establish with a real key lifecycle the phone can prove on glass.
+- **Pros:**
+  - Mobile-check green with all new tests passing, fingerprint pinned by a fixed vector computed independently.
+  - Seed never leaves except as signatures, bootstrap failure deletes the key so no partial Owner lingers.
+- **Cons & Trade-offs:**
+  - Blind Dart against four new packages, CI arbitrates versions and APIs.
+  - Seed at rest is hardware-wrapped software bytes, not chip-born Ed25519, since Keystore mints no Ed25519. Documented in the file.
+  - First-run screen still shows one generic sentence for every failure, so device versus key versus network cannot be told apart on glass.
+- **Status:** Implemented
+
+## DEC-043 Android scaffold must use FragmentActivity for local_auth
+- **Date/Context:** Sept 28 2026, Owner setup failed on Android 13 with enrolled fingerprint plus face and no OS prompt across three installs of run 36433763774
+- **Context/What:** `mobile-apk.yml` scaffolds `android/` fresh every build from `flutter create`, whose MainActivity extends FlutterActivity. local_auth requires FlutterFragmentActivity, so every authenticate call failed immediately with no prompt. Patched the scaffold step to rewrite the import plus superclass to FlutterFragmentActivity, fail the job if the patch misses, and ensure USE_BIOMETRIC is in the manifest.
+- **The "Why":** No prompt plus instant failure pointed before the network at the activity type, not at stale binaries or missing enrollment. The scaffold regenerates the bug every build unless patched in CI.
+- **Improvement over Previous Solution:** Replaced a scaffold that silently broke biometrics with one that proves the activity type before building the APK.
+- **Pros:**
+  - Next dispatch carries the real prompt path on Android 13.
+  - Patch is verified by grep plus cat, so a template change fails loudly instead of shipping a dead button.
+- **Cons & Trade-offs:**
+  - Still patching a generated file in CI instead of committing `android/` to the tree. Template drift can break the sed match.
+  - Generic failure text from DEC-042 still hides the step on glass. Surfaced errors remain the next fix.
+- **Status:** Implemented
