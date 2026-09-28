@@ -16,7 +16,7 @@ const String _manifestBody = '''
     "versionCode": 18,
     "versionName": "0.1.0+18",
     "apkUrl": "https://github.com/Narayan201120/calcar/releases/download/mobile-18/calcar.apk",
-    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a"
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
   },
   "previous": {
     "versionCode": 16,
@@ -27,7 +27,7 @@ const String _manifestBody = '''
 }
 ''';
 
-/// 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a is the
+/// 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 is the
 /// SHA-256 of the ASCII bytes of "test".
 final List<int> _apkBytes = utf8.encode('test');
 
@@ -117,7 +117,7 @@ void main() {
         await file.writeAsBytes(_apkBytes, flush: true);
         await verifyApkSha256(
           file,
-          '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a',
+          '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
         );
       },
     );
@@ -275,7 +275,7 @@ void main() {
     "versionCode": 16,
     "versionName": "0.1.0+16",
     "apkUrl": "https://github.com/Narayan201120/calcar/releases/download/mobile-16/calcar.apk",
-    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a"
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
   }
 }
 ''';
