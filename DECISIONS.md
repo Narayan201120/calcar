@@ -610,3 +610,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Blind Dart throughout, CI arbitrates new plugin versions and manifest merge.
   - Update screen is one tap from main rather than inline state, and session persistence stays in memory only.
 - **Status:** Implemented
+
+## DEC-047 Debug signing must cover every Gradle home candidate
+- **Date/Context:** Sept 28 2026, phone reported a package conflict installing release 22 over 21
+- **Context/What:** Releases 21 and 22 carried different ephemeral runner keys despite the pin step, proven by exporting the committed cert and finding its bytes in neither APK. The step copied only to `~/.android`, but GitHub runners set `ANDROID_SDK_HOME` and the SDK tools resolve the debug keystore through several candidate homes. Changed the pin step to plant the key at every candidate plus export `ANDROID_USER_HOME`, and added a release gate comparing the apksigner cert fingerprint against the committed key so a drift fails loudly instead of publishing an uninstallable update.
+- **The "Why":** A dev updater lives or dies on one stable signing identity. Copying to one of several homes is a silent miss, exactly what happened.
+- **Improvement over Previous Solution:** Replaced a single-path copy plus hope with plant-everywhere plus a fingerprint gate.
+- **Pros:**
+  - The next release proves its identity in CI before publishing.
+  - One-time cost only: phones on pre-pin builds uninstall once, then update forever.
+- **Cons & Trade-offs:**
+  - Releases 21 and 22 can never update into each other. The first pinned release needs a fresh install.
+  - The expected fingerprint is hardcoded in CI against a public dev key, acceptable only because production signing stays out of scope.
+- **Status:** Implemented

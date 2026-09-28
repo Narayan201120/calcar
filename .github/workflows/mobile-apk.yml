@@ -64,15 +64,28 @@ jobs:
       - name: Pin shared debug signing identity
         run: |
           set -euo pipefail
-          # Every CI runner generates its own ~/.android/debug.keystore on
-          # first use, which would give each build a different signing
-          # identity and make Android refuse updates as incompatible.
-          # Copy the committed dev key so all CI APKs share one identity.
-          # This key is development only and public by design.
+          # Every CI runner generates its own debug.keystore on first use,
+          # which would give each build a different signing identity and
+          # make Android refuse updates as incompatible. Copy the committed
+          # dev key so all CI APKs share one identity. This key is
+          # development only and public by design.
+          # The Gradle and SDK tools resolve the debug keystore through
+          # several candidate homes, and GitHub runners set
+          # ANDROID_SDK_HOME, so one copy is not enough: plant ours at
+          # every candidate and pin ANDROID_USER_HOME for later steps.
           test -f debug.keystore
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
           chmod 600 ~/.android/debug.keystore
+          if [ -n "${ANDROID_SDK_HOME:-}" ]; then
+            mkdir -p "$ANDROID_SDK_HOME/.android"
+            cp debug.keystore "$ANDROID_SDK_HOME/.android/debug.keystore"
+          fi
+          if [ -n "${ANDROID_USER_HOME:-}" ]; then
+            mkdir -p "$ANDROID_USER_HOME"
+            cp debug.keystore "$ANDROID_USER_HOME/debug.keystore"
+          fi
+          echo "ANDROID_USER_HOME=$HOME/.android" >> "$GITHUB_ENV"
       - name: Build debug APK
         run: |
           set -euo pipefail
@@ -165,6 +178,17 @@ jobs:
           BT=$(echo "$ANDROID_HOME/build-tools/"*/apksigner | tr ' ' '\n' | sort | tail -n 1)
           if [ -x "$BT" ]; then
             "$BT" verify --print-certs /tmp/calcar.apk | head -n 4 || true
+          fi
+          # Signing gate: the APK must carry the shared dev identity, or
+          # Android will refuse it as an update. Fail loudly instead of
+          # publishing an uninstallable release.
+          EXPECTED="3B:1C:12:6E:40:D2:D7:8B:2C:E6:E8:8B:CE:C4:55:9A:4F:13:D3:40:A8:D5:B2:ED:94:1F:45:DF:4B:F0:D8:B4"
+          if [ -x "$BT" ]; then
+            ACTUAL=$("$BT" verify --print-certs /tmp/calcar.apk | grep -m 1 -o '[0-9A-F:]\{59,\}' || true)
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "signing identity mismatch: got ${ACTUAL:-none}, want $EXPECTED"
+              exit 1
+            fi
           fi
           gh release create "$TAG" /tmp/calcar.apk /tmp/update.json \
             --title "Calcar mobile-${RUN}" \
