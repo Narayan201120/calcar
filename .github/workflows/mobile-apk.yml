@@ -191,7 +191,7 @@ jobs:
           # vary by version, so both sides compare colonless lowercase.
           EXPECTED="3b1c126e40d2d78b2ce6e88bcec4559a4f13d340a8d5b2ed941f45df4bf0d8b4"
           if [ -x "$BT" ]; then
-            ACTUAL=$("$BT" verify --print-certs /tmp/calcar.apk | grep -i 'SHA-256 digest' | grep -oiE '[0-9a-f:]\{32,\}' | head -n 1 | tr -d ':' | tr 'A-Z' 'a-z' || true)
+            ACTUAL=$("$BT" verify --print-certs /tmp/calcar.apk | grep -i 'SHA-256 digest' | grep -oiE '[0-9a-f:]{32,}' | head -n 1 | tr -d ':' | tr 'A-Z' 'a-z' || true)
             if [ "$ACTUAL" != "$EXPECTED" ]; then
               echo "signing identity mismatch: got ${ACTUAL:-none}, want $EXPECTED"
               exit 1
