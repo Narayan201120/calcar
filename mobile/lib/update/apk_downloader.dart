@@ -5,11 +5,11 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-
 /// Lowercase hex SHA-256 of bytes. Pure, fully tested.
 String sha256Hex(List<int> bytes) {
   return crypto.sha256.convert(bytes).toString();

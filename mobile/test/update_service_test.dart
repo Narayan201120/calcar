@@ -48,7 +48,8 @@ UpdateController _controller({
   UpdateManifest? manifest,
   Object? fetchError,
   int currentCode = 16,
-  Future<File> Function(UpdateRelease release)? download,
+  Future<File> Function(UpdateRelease release, DownloadProgress onProgress)?
+      download,
   ApkInstaller? installer,
 }) {
   return UpdateController(
