@@ -3,16 +3,16 @@
 //
 // Two inputs come from the host, not from the app: the backend base URL
 // and the agent base URL, the computer over the private mesh. Both are
-// compiled in with --dart-define for now. OPEN ITEM: the Owner
-// establish step needs a hardware-backed key, which lives in a platform
-// keystore plugin that does not exist yet, so `ownerEstablished` is a
-// compile-time flag and the first-run screen is the honest default.
+// compiled in with --dart-define for now. Owner establish runs through
+// the biometric gate plus the hardware-wrapped key service above.
 library;
 
 import 'package:calcar/api/api.dart';
 import 'package:calcar/app.dart';
+import 'package:calcar/auth/biometric_gate.dart';
+import 'package:calcar/keys/owner_keys.dart';
+import 'package:calcar/onboarding/owner_setup.dart';
 import 'package:calcar/push/push_service.dart';
-import 'package:calcar/screens/first_run.dart';
 import 'package:calcar/screens/wired/wired_transport.dart';
 import 'package:calcar/state/state.dart';
 import 'package:flutter/material.dart';
@@ -82,26 +82,20 @@ void main() {
       child: CalcarApp(
         deps: CalcarShellDeps(
           api: api,
-          // Fails closed. A real biometric gate is a platform-channel
-          // implementation; until it lands, every fresh-auth call is
-          // refused rather than silently allowed.
-          authGate: const _UnavailableGate(),
-          onEstablishOwner: (String displayName) async => false,
+          // Real gate plus real key service. Biometric refusal fails
+          // closed here exactly as it does everywhere else.
+          authGate: BiometricGate(),
+          onEstablishOwner: (String displayName) => establishOwner(
+            displayName: displayName,
+            keys: OwnerKeyService(),
+            gate: BiometricGate(),
+            api: api,
+            requestId: newRequestId(),
+          ),
         ),
         start: _ownerEstablished ? CalcarStart.computers : CalcarStart.firstRun,
         deepLinkBus: bus,
       ),
     ),
   );
-}
-
-/// The stand-in biometric gate. `unavailable` is a distinct answer from
-/// `cancelled`: callers treat it as a hard refusal.
-class _UnavailableGate implements LocalAuthGate {
-  const _UnavailableGate();
-
-  @override
-  Future<LocalAuthResult> authenticate({required String reason}) async {
-    return LocalAuthResult.unavailable;
-  }
 }
