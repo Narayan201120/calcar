@@ -698,3 +698,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Token expiry still means full re-setup; rotation stays open.
   - Socket auth still uses empty compile-time values, unchanged.
 - **Status:** Implemented
+
+## DEC-054 First glass pairing end to end
+- **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
+- **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
+- **The "Why":** Every layer was proven in isolation before; this is the first traverse of all of them together on real hardware.
+- **Improvement over Previous Solution:** Replaced stacked unproven halves with one witnessed loop.
+- **Pros:**
+  - Trust ceremony held: fingerprint compared before approval, single-use latch consumed after.
+- **Cons & Trade-offs:**
+  - QR transfer was a manual screenshot file, no camera path yet.
+  - Socket live events still unauthenticated; the poll carried the join.
+- **Status:** Implemented
