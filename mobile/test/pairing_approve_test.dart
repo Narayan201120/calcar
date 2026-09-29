@@ -131,7 +131,7 @@ void main() {
   });
 
   group('owner signer', () {
-    PairingJoin _join() {
+    PairingJoin makeJoin() {
       return PairingJoin(
         requestId: 'req-1',
         pubkeyB64: base64Encode(_hex(_computerPubHex)),
@@ -143,7 +143,7 @@ void main() {
       );
     }
 
-    OwnerKeyService _keys() {
+    OwnerKeyService makeKeys() {
       final _MapStore store = _MapStore();
       store.backing[OwnerKeyService.seedKey] =
           base64Encode(_hex(_ownerSeedHex));
@@ -154,13 +154,13 @@ void main() {
       'contract: unlock plus sign returns fields bound to this join',
       () async {
         final OwnerPairingSigner signer = OwnerPairingSigner(
-          keys: _keys(),
+          keys: makeKeys(),
           gate: _Gate(LocalAuthResult.unlocked),
           authorizationId: () => 'auth-vector-0001',
           nonceBytes: () => _hex('0102030405060708090a0b0c0d0e0f10'),
           nowMillis: () => 1789689600000,
         );
-        final PairingAuthorization auth = await signer(_join());
+        final PairingAuthorization auth = await signer(makeJoin());
         expect(auth.authorizationId, 'auth-vector-0001');
         expect(auth.decidedAtMillis, 1789689600000);
         expect(
@@ -174,10 +174,10 @@ void main() {
       'contract: refused re-auth signs nothing and reports failure',
       () async {
         final OwnerPairingSigner signer = OwnerPairingSigner(
-          keys: _keys(),
+          keys: makeKeys(),
           gate: _Gate(LocalAuthResult.cancelled),
         );
-        expect(() => signer(_join()), throwsStateError);
+        expect(() => signer(makeJoin()), throwsStateError);
       },
     );
 
@@ -185,7 +185,7 @@ void main() {
       'contract: a join missing bindings is refused before any signing',
       () async {
         final OwnerPairingSigner signer = OwnerPairingSigner(
-          keys: _keys(),
+          keys: makeKeys(),
           gate: _Gate(LocalAuthResult.unlocked),
         );
         const PairingJoin bare = PairingJoin(

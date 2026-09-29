@@ -322,7 +322,7 @@ class AppRoutes {
             signer: OwnerPairingSigner(
               keys: OwnerKeyService(),
               gate: deps.authGate,
-            ),
+            ).call,
           ),
         ),
       );
