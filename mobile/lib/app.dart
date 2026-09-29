@@ -26,6 +26,8 @@ library;
 import 'dart:async';
 
 import 'package:calcar/api/api.dart';
+import 'package:calcar/keys/owner_keys.dart';
+import 'package:calcar/pairing/approve_signer.dart';
 import 'package:calcar/screens/first_run.dart';
 import 'package:calcar/screens/wired/wired_add_computer.dart';import 'package:calcar/screens/wired/wired_computer_detail.dart';
 import 'package:calcar/screens/wired/wired_computers.dart';
@@ -313,7 +315,16 @@ class AppRoutes {
     if (routeName == addComputer) {
       return _page(
         settings,
-        const RealtimeScope(child: WiredAddComputerScreen()),
+        RealtimeScope(
+          child: WiredAddComputerScreen(
+            // Real Owner signer: fresh biometric at tap time, hardware
+            // key signature over the exact join the card showed.
+            signer: OwnerPairingSigner(
+              keys: OwnerKeyService(),
+              gate: deps.authGate,
+            ),
+          ),
+        ),
       );
     }
     if (routeName == appUpdate) {

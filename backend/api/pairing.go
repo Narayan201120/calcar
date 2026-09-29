@@ -29,6 +29,7 @@ func sessionJSON(s store.PairingSession) map[string]any {
 		out["join_request_id"] = s.JoinRequestID
 		out["join_fingerprint"] = s.JoinFingerprint
 		out["join_display_name"] = s.JoinName
+		out["join_pubkey_b64"] = base64.StdEncoding.EncodeToString(s.JoinPubKey)
 	}
 	return out
 }
@@ -150,6 +151,7 @@ func (s *Server) handlePairingJoin(w http.ResponseWriter, r *http.Request) {
 		Payload: map[string]any{
 			"session_id": sessionID, "display_name": name,
 			"fingerprint": fp, "request_id": req.RequestID,
+			"join_pubkey_b64": base64.StdEncoding.EncodeToString(pub),
 			// requested_at_millis is the creation proxy (expires_at minus
 			// the 10-minute TTL). The seam stores no join timestamp, so
 			// the phone MUST reuse this value verbatim in ContextHash;

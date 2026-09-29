@@ -4,17 +4,16 @@
 // session, the TTL expires it, and neither can be reused: regenerate
 // mints a brand new session id, so a spent session is never replayed.
 //
-// The join pubkey is the one field the control plane does not hand back.
-// The session record carries the name, fingerprint, and request id, but
-// the backend refuses a decision whose subject pubkey differs from the
-// stored join, so the pubkey can only come from the socket's join event.
-// An approve without it is refused with a reason instead of sent with a
-// guess.
+// The join pubkey arrives Owner-only in the session record and the
+// join event. The backend refuses a decision whose subject pubkey
+// differs from the stored join, and an approve without the key is
+// refused with a reason instead of sent with a guess.
 import 'dart:async';
 
 import 'package:calcar/api/api_error.dart';
 import 'package:calcar/api/client.dart';
 import 'package:calcar/api/models.dart';
+import 'package:calcar/pairing/approve_signer.dart';
 import 'package:calcar/screens/add_computer.dart';
 import 'package:calcar/screens/wired/wired_transport.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,17 +46,25 @@ class PairingAuthorization {
 }
 
 /// What the Owner is shown, and what the decision must be bound to.
+/// The session, Owner, and request time ride along so approval signs
+/// exactly the context the card displayed.
 class PairingJoin {
   final String requestId;
   final String pubkeyB64;
   final String displayName;
   final String fingerprint;
+  final String sessionId;
+  final String ownerDeviceId;
+  final int requestedAtMillis;
 
   const PairingJoin({
     required this.requestId,
     required this.pubkeyB64,
     required this.displayName,
     required this.fingerprint,
+    this.sessionId = '',
+    this.ownerDeviceId = '',
+    this.requestedAtMillis = 0,
   });
 }
 
@@ -378,18 +385,29 @@ class AddComputerController extends StateNotifier<AddComputerState> {
     if (requestId.isEmpty) {
       return;
     }
-    // Keep a pubkey the socket already supplied for this same join.
+    // The poll record now carries the join key Owner-only, so approval
+    // has the exact bytes to bind. A socket-supplied key for the same
+    // join still wins when the record has not caught up yet.
     final PairingJoin? known = state.join;
+    final String polledKey = session.joinPubkeyB64 ?? '';
+    final String pubkey = known != null &&
+            known.requestId == requestId &&
+            known.pubkeyB64.isNotEmpty &&
+            polledKey.isEmpty
+        ? known.pubkeyB64
+        : polledKey;
     _emit(
       () => state.copyWith(
         stage: AddComputerStage.waiting,
         join: PairingJoin(
           requestId: requestId,
-          pubkeyB64: known != null && known.requestId == requestId
-              ? known.pubkeyB64
-              : '',
+          pubkeyB64: pubkey,
           displayName: session.joinDisplayName ?? '',
           fingerprint: session.joinFingerprint ?? '',
+          sessionId: session.sessionId,
+          ownerDeviceId: _api.deviceId,
+          requestedAtMillis:
+              session.expiresAtMillis - kPairingTtlMillis,
         ),
       ),
     );

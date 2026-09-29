@@ -45,6 +45,7 @@ class PairingSession {
   final String? joinRequestId;
   final String? joinFingerprint;
   final String? joinDisplayName;
+  final String? joinPubkeyB64;
 
   const PairingSession({
     required this.sessionId,
@@ -55,6 +56,7 @@ class PairingSession {
     this.joinRequestId,
     this.joinFingerprint,
     this.joinDisplayName,
+    this.joinPubkeyB64,
   });
 
   factory PairingSession.fromJson(Map<String, dynamic> json) {
@@ -67,6 +69,7 @@ class PairingSession {
       joinRequestId: json['join_request_id']?.toString(),
       joinFingerprint: json['join_fingerprint']?.toString(),
       joinDisplayName: json['join_display_name']?.toString(),
+      joinPubkeyB64: json['join_pubkey_b64']?.toString(),
     );
   }
 }

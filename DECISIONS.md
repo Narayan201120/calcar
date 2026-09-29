@@ -661,3 +661,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Manual phone runs still need the URI retyped, since no PC camera path exists.
   - The waiting card on glass remains to be eyeballed against a live join.
 - **Status:** Implemented
+
+## DEC-051 Owner approve path signs the exact join shown
+- **Date/Context:** Sept 29 2026, live join reached the waiting card but Approve refused without the PC key
+- **Context/What:** Backend now exposes the join pubkey Owner-only in the session record plus the join event. The phone poll feeds it into the join with the requested-at proxy, and the route builds the pairing screen with a real Owner signer: fresh biometric at tap time, subject id derivation, context hash over exactly the card fields, deterministic record bytes, Ed25519 signature. The byte layouts are pinned against backend vectors.json in new pairing_approve_test.dart, including the Owner signature itself from the vector seed.
+- **The "Why":** Approving without the key would sign blind. Every byte the backend verifies is now produced on the phone from the same join the Owner saw.
+- **Improvement over Previous Solution:** Replaced a route with no signer and a record with no key with a signed grant the backend accepts.
+- **Pros:**
+  - Backend api plus trust suites green locally with the new field.
+  - Hand-rolled encoder instead of blind generated names, proven by vector hex.
+- **Cons & Trade-offs:**
+  - Socket auth still carries an empty token, so the instant event path waits; the 2s poll delivers the key for approve.
+  - Live approve on glass with the real phone remains the final proof.
+- **Status:** Implemented
