@@ -12,6 +12,7 @@ import 'package:calcar/pairing/qr_payload.dart';
 import 'package:calcar/screens/add_computer.dart';
 import 'package:calcar/screens/wired/add_computer_controller.dart';
 import 'package:calcar/screens/wired/wired_transport.dart';
+import 'package:calcar/state/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -136,11 +137,19 @@ class _WiredAddComputerScreenState
 
   /// The pure screen has nowhere to put an error, so a failure rides a
   /// snack bar. It never blocks a stage: the Owner decides whether to
-  /// retry from the same card.
+  /// retry from the same card. A spent session also refreshes the shell
+  /// list behind this route, so popping back shows the new computer
+  /// instead of the stale empty answer the list fetched before.
   void _reportErrors() {
     ref.listen<AddComputerState>(
       addComputerControllerProvider(widget.flowId),
       (AddComputerState? previous, AddComputerState next) {
+        if (next.stage == AddComputerStage.done &&
+            previous?.stage != AddComputerStage.done) {
+          unawaited(
+            ref.read(devicesControllerProvider.notifier).refresh(),
+          );
+        }
         if (next.error.isEmpty || next.error == previous?.error) {
           return;
         }

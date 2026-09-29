@@ -807,14 +807,43 @@ void main() {
   });
 
   group('first run', () {
+    MaterialApp firstRunApp({
+      required _FakeGate gate,
+      required Future<bool> Function(String displayName) onEstablishOwner,
+      _FakeSnapshotSource? source,
+    }) {
+      final CalcarShellDeps deps = CalcarShellDeps(
+        api: _api(<http.Request>[]),
+        authGate: gate,
+        onEstablishOwner: onEstablishOwner,
+      );
+      return MaterialApp(
+        onGenerateRoute: (RouteSettings settings) =>
+            AppRoutes.generate(settings, deps, CalcarStart.firstRun),
+      );
+    }
+
+    Future<void> _establish(
+      WidgetTester tester, {
+      String name = 'Owner Pixel',
+    }) async {
+      await tester.enterText(
+        find.byKey(const ValueKey('first-run-owner-name')),
+        name,
+      );
+      await tester.tap(find.byKey(const ValueKey('first-run-owner-submit')));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets(
-      'contract: the lock blocks the list until the gate opens it',
+      'contract: the lock hands over to the shell list on unlock',
       (WidgetTester tester) async {
         final _FakeGate gate = _FakeGate(LocalAuthResult.unlocked);
         final List<String> established = <String>[];
         await tester.pumpWidget(
-          MaterialApp(
-            home: FirstRunScreen(
+          ProviderScope(
+            overrides: _overrides(source: _FakeSnapshotSource()),
+            child: firstRunApp(
               gate: gate,
               onEstablishOwner: (String displayName) async {
                 established.add(displayName);
@@ -826,17 +855,12 @@ void main() {
 
         expect(find.text('No computers yet'), findsNothing);
 
-        await tester.enterText(
-          find.byKey(const ValueKey('first-run-owner-name')),
-          '  Owner Pixel  ',
-        );
-        await tester.tap(find.byKey(const ValueKey('first-run-owner-submit')));
-        await tester.pumpAndSettle();
+        await _establish(tester);
 
         expect(established, <String>['Owner Pixel']);
         expect(find.byKey(const ValueKey('first-run-unlock')), findsOneWidget);
         // The list stays hidden and no prompt fires on its own.
-        expect(find.text('No computers yet'), findsNothing);
+        expect(find.text('WIN-PC'), findsNothing);
         expect(gate.calls, 0);
 
         await tester.tap(find.byKey(const ValueKey('first-run-unlock')));
@@ -844,7 +868,8 @@ void main() {
 
         expect(gate.calls, 1);
         expect(gate.lastReason, isNotEmpty);
-        expect(find.text('No computers yet'), findsOneWidget);
+        // The shell list owns the rows now, not a bare first-run screen.
+        expect(find.text('WIN-PC'), findsOneWidget);
         expect(find.byKey(const ValueKey('first-run-unlock')), findsNothing);
       },
     );
@@ -854,19 +879,15 @@ void main() {
       (WidgetTester tester) async {
         final _FakeGate gate = _FakeGate(LocalAuthResult.unlocked);
         await tester.pumpWidget(
-          MaterialApp(
-            home: FirstRunScreen(
+          ProviderScope(
+            overrides: _overrides(source: _FakeSnapshotSource()),
+            child: firstRunApp(
               gate: gate,
               onEstablishOwner: (String displayName) async => false,
             ),
           ),
         );
-        await tester.enterText(
-          find.byKey(const ValueKey('first-run-owner-name')),
-          'Owner Pixel',
-        );
-        await tester.tap(find.byKey(const ValueKey('first-run-owner-submit')));
-        await tester.pumpAndSettle();
+        await _establish(tester);
 
         expect(
           find.byKey(const ValueKey('first-run-owner-error')),
@@ -874,7 +895,7 @@ void main() {
         );
         expect(find.byKey(const ValueKey('first-run-unlock')), findsNothing);
         expect(gate.calls, 0);
-        expect(find.text('No computers yet'), findsNothing);
+        expect(find.text('WIN-PC'), findsNothing);
       },
     );
 
@@ -883,19 +904,15 @@ void main() {
       (WidgetTester tester) async {
         final _FakeGate gate = _FakeGate(LocalAuthResult.cancelled);
         await tester.pumpWidget(
-          MaterialApp(
-            home: FirstRunScreen(
+          ProviderScope(
+            overrides: _overrides(source: _FakeSnapshotSource()),
+            child: firstRunApp(
               gate: gate,
               onEstablishOwner: (String displayName) async => true,
             ),
           ),
         );
-        await tester.enterText(
-          find.byKey(const ValueKey('first-run-owner-name')),
-          'Owner Pixel',
-        );
-        await tester.tap(find.byKey(const ValueKey('first-run-owner-submit')));
-        await tester.pumpAndSettle();
+        await _establish(tester);
         await tester.tap(find.byKey(const ValueKey('first-run-unlock')));
         await tester.pumpAndSettle();
 
@@ -905,7 +922,7 @@ void main() {
           find.byKey(const ValueKey('first-run-lock-error')),
           findsNothing,
         );
-        expect(find.text('No computers yet'), findsNothing);
+        expect(find.text('WIN-PC'), findsNothing);
 
         gate.result = LocalAuthResult.unavailable;
         await tester.tap(find.byKey(const ValueKey('first-run-unlock')));
@@ -915,14 +932,14 @@ void main() {
           find.byKey(const ValueKey('first-run-continue-unlocked')),
           findsOneWidget,
         );
-        expect(find.text('No computers yet'), findsNothing);
+        expect(find.text('WIN-PC'), findsNothing);
 
         await tester.tap(
           find.byKey(const ValueKey('first-run-continue-unlocked')),
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('No computers yet'), findsOneWidget);
+        expect(find.text('WIN-PC'), findsOneWidget);
       },
     );
   });

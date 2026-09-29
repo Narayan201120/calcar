@@ -1,7 +1,7 @@
-/// First run: Owner establish, then the biometric lock, then the empty
-/// list. Three stages and no way back, because PLAN P2 makes the first
-/// trusted phone the Owner and PLAN P6 makes a normal open need a fresh
-/// local auth.
+/// First run: Owner establish, then the biometric lock, then handoff
+/// to the shell list. Two stages and no way back, because PLAN P2 makes
+/// the first trusted phone the Owner and PLAN P6 makes a normal open
+/// need a fresh local auth.
 ///
 /// [LocalAuthGate] is the only seam and it is an interface on purpose.
 /// No method channel is wired here: the merge step passes the local_auth
@@ -10,7 +10,6 @@
 /// instead of being stuck.
 library;
 
-import 'package:calcar/screens/computers.dart';
 import 'package:flutter/material.dart';
 
 /// Outcome of one local auth prompt. Every failure is a value, so a
@@ -49,11 +48,9 @@ enum FirstRunStage {
   /// Collect the Owner display name and create the Owner.
   ownerEstablish,
 
-  /// The Owner exists. The phone is locked until the gate opens it.
+  /// The Owner exists. The phone is locked until the gate opens it,
+  /// then hands over to the shell list.
   locked,
-
-  /// Unlocked. The app shows the empty list.
-  ready,
 }
 
 /// First run screen.
@@ -141,13 +138,17 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
     if (!mounted) {
       return;
     }
+    if (result == LocalAuthResult.unlocked) {
+      // First run is a gate, not a list. The shell owns My Computers,
+      // so unlock hands over to it instead of painting a dead list that
+      // never fetches.
+      Navigator.of(context).pushReplacementNamed('/computers');
+      return;
+    }
     setState(() {
       _busy = false;
       _noLockEnrolled = result == LocalAuthResult.unavailable;
-      if (result == LocalAuthResult.unlocked) {
-        _stage = FirstRunStage.ready;
-        _error = '';
-      } else if (result == LocalAuthResult.failed) {
+      if (result == LocalAuthResult.failed) {
         _error = 'Unlock failed';
       }
     });
@@ -160,15 +161,6 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
         return _ownerForm();
       case FirstRunStage.locked:
         return _lock();
-      case FirstRunStage.ready:
-        // First run has no shell route behind it, so the empty list must
-        // navigate to pairing itself instead of relying on the shell.
-        return ComputersScreen(
-          onAddComputer: () =>
-              Navigator.of(context).pushNamed('/add-computer'),
-          onOpenUpdate: () =>
-              Navigator.of(context).pushNamed('/update'),
-        );
     }
   }
 
@@ -249,9 +241,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                 onPressed: _busy
                     ? null
                     : () {
-                        setState(() {
-                          _stage = FirstRunStage.ready;
-                        });
+                        Navigator.of(context)
+                            .pushReplacementNamed('/computers');
                       },
                 child: const Text('Continue without a lock'),
               ),
