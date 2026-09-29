@@ -674,3 +674,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Socket auth still carries an empty token, so the instant event path waits; the 2s poll delivers the key for approve.
   - Live approve on glass with the real phone remains the final proof.
 - **Status:** Implemented
+
+## DEC-052 First run hands off to the shell list
+- **Date/Context:** Sept 29 2026, two approved pairings left the phone on a dead list showing empty
+- **Context/What:** FirstRun unlock painted a bare ComputersScreen that never fetches, and the shell list underneath never refetched after a decision. Unlock plus continue now replace the route with `/computers`, and the pairing screen refreshes the devices list the moment a session is spent. The first-run widget tests now pump the real route with fakes and assert the shell rows.
+- **The "Why":** The grant landed twice while the screen showed a stale answer. A list that cannot refresh is a broken list.
+- **Improvement over Previous Solution:** Replaced a dead-end first-run list with the fetching shell plus a refresh on every spent session.
+- **Pros:**
+  - Both staleness paths closed: post-unlock handoff and post-decision refresh.
+- **Cons & Trade-offs:**
+  - The bare-screen empty state still has no manual refresh affordance; that stays open.
+  - Proves against the new backend only after the next addressed build.
+- **Status:** Implemented
