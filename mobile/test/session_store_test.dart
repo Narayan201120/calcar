@@ -1,3 +1,4 @@
+import 'package:calcar/auth/session_store.dart';
 import 'package:calcar/keys/owner_keys.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,11 +16,14 @@ void main() {
             token: 'tok-1',
           ),
         );
-        expect(await store.load(), const OwnerSession(
-          deviceId: 'PH-1',
-          userId: 'user-1',
-          token: 'tok-1',
-        ));
+        expect(
+          await store.load(),
+          const OwnerSession(
+            deviceId: 'PH-1',
+            userId: 'user-1',
+            token: 'tok-1',
+          ),
+        );
       },
     );
 
