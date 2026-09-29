@@ -648,3 +648,16 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Source is 887px, not 1024, scaled up slightly by the generator.
   - Adaptive background hex is eyeballed from the mark, not sampled.
 - **Status:** Implemented
+
+## DEC-050 PC join prover plus pairing E2E
+- **Date/Context:** Sept 29 2026, phone renders a scannable QR but no PC code can answer it
+- **Context/What:** New dev-only `backend/cmd/pcjoin` speaking the unauthenticated join half: parses the spec section 3 URI, mints a fresh Ed25519 key per run, derives the fingerprint through the same trust package the backend verifies, POSTs the join, saves the seed 0600 for later approve-path work. New `scripts/e2e-pairing.ps1` drives the full loop against a dev in-memory backend on :18080: Owner bootstrap, challenge plus verify login, session create, PC join, Owner-side re-read asserting the join landed, plus a garbage-session refusal. No unit tests; the script log is the artifact.
+- **The "Why":** The QR on glass is unproven until a join traverses the real validation order: live session, QR nonce binding, fresh request id, derived fingerprint.
+- **Improvement over Previous Solution:** Replaced an unscannable-by-anything image with a join the backend accepts and the phone poll can display.
+- **Pros:**
+  - Green locally: server-ready, join-loop, join-landed, bogus-refused.
+  - Go build plus vet clean; stdlib ed25519 only, no new dependencies.
+- **Cons & Trade-offs:**
+  - Manual phone runs still need the URI retyped, since no PC camera path exists.
+  - The waiting card on glass remains to be eyeballed against a live join.
+- **Status:** Implemented
