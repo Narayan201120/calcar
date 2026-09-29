@@ -686,3 +686,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - The bare-screen empty state still has no manual refresh affordance; that stays open.
   - Proves against the new backend only after the next addressed build.
 - **Status:** Implemented
+
+## DEC-053 Owner session persists across restarts
+- **Date/Context:** Sept 29 2026, every app open demanded full Owner setup from scratch
+- **Context/What:** The token lived in memory only. Owner setup now saves device, user, and token in the hardware-wrapped store, main restores plus validates with a live list call before painting, and a returning phone starts at the lock instead of re-registering. A dead token clears itself back to setup. Covered by a store roundtrip suite plus a returning-lock widget test.
+- **The "Why":** Amnesia on every launch made the app unusable as a daily driver and retrained the user to ignore setup.
+- **Improvement over Previous Solution:** Replaced memory-only session with validated persistence plus lock-first return.
+- **Pros:**
+  - No trust regression: the lock still gates every open, and validation fails closed.
+- **Cons & Trade-offs:**
+  - Token expiry still means full re-setup; rotation stays open.
+  - Socket auth still uses empty compile-time values, unchanged.
+- **Status:** Implemented
