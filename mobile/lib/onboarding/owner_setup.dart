@@ -10,12 +10,15 @@ library;
 import 'dart:convert';
 
 import 'package:calcar/api/api.dart';
+import 'package:calcar/auth/session_store.dart';
 import 'package:calcar/keys/owner_keys.dart';
 import 'package:calcar/screens/first_run.dart';
 
 /// Establishes this phone as Owner. Returns true only when the server
 /// accepted the bootstrap and the challenge plus verify login stored a
-/// bearer token on the client. Injected seams only, so tests never touch
+/// bearer token on the client. Persists the session when a store is
+/// given, so a returning phone unlocks instead of redoing setup.
+/// Injected seams only, so tests never touch
 /// hardware, storage, or the network.
 Future<bool> establishOwner({
   required String displayName,
@@ -23,6 +26,7 @@ Future<bool> establishOwner({
   required LocalAuthGate gate,
   required CalcarApiClient api,
   required String requestId,
+  SessionStore? session,
 }) async {
   if (displayName.trim().isEmpty) {
     return false;
@@ -53,6 +57,18 @@ Future<bool> establishOwner({
       signatureB64: base64Encode(sig),
     );
     api.deviceId = boot.deviceId;
+    api.userId = boot.userId;
+    final String? token = api.token;
+    if (token == null || token.isEmpty) {
+      throw StateError('login minted no token');
+    }
+    await session?.save(
+      OwnerSession(
+        deviceId: boot.deviceId,
+        userId: boot.userId,
+        token: token,
+      ),
+    );
     return true;
   } on Object catch (_) {
     await keys.deleteKey();

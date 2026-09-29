@@ -63,10 +63,15 @@ class FirstRunScreen extends StatefulWidget {
   final Future<bool> Function(String displayName) onEstablishOwner;
   final LocalAuthGate gate;
 
+  /// Starts at the lock instead of Owner setup. A returning phone with
+  /// a persisted session proves presence, never re-registers.
+  final bool skipEstablish;
+
   const FirstRunScreen({
     super.key,
     required this.onEstablishOwner,
     required this.gate,
+    this.skipEstablish = false,
   });
 
   @override
@@ -76,7 +81,9 @@ class FirstRunScreen extends StatefulWidget {
 class _FirstRunScreenState extends State<FirstRunScreen> {
   final TextEditingController _name = TextEditingController();
 
-  FirstRunStage _stage = FirstRunStage.ownerEstablish;
+  late FirstRunStage _stage = widget.skipEstablish
+      ? FirstRunStage.locked
+      : FirstRunStage.ownerEstablish;
   bool _busy = false;
   String _error = '';
   bool _noLockEnrolled = false;

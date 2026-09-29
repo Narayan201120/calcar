@@ -301,9 +301,11 @@ class AppRoutes {
     if (routeName == '/') {
       return _page(
         settings,
-        start == CalcarStart.firstRun
-            ? _firstRunView(deps)
-            : _homeView(),
+        switch (start) {
+          CalcarStart.firstRun => _firstRunView(deps),
+          CalcarStart.returning => _returningView(deps),
+          CalcarStart.computers => _homeView(),
+        },
       );
     }
     if (routeName == computers) {
@@ -457,6 +459,14 @@ class AppRoutes {
     );
   }
 
+  static Widget _returningView(CalcarShellDeps deps) {
+    return FirstRunScreen(
+      gate: deps.authGate,
+      onEstablishOwner: deps.onEstablishOwner,
+      skipEstablish: true,
+    );
+  }
+
   static Widget _deadEndView(String routeName) {
     return _DeadEndView(routeName: routeName);
   }
@@ -480,15 +490,20 @@ class CalcarShellDeps {
 }
 
 /// Where the shell starts. main.dart picks [firstRun] until an Owner
-/// exists and [computers] after, so the cold start cache read and the
+/// exists, [returning] when a persisted session validated, and
+/// [computers] after, so the cold start cache read and the
 /// foreground socket only run once there is a session behind them.
 enum CalcarStart {
   /// My Computers behind the cold start gate.
   computers,
 
-  /// Owner establish, then the lock, then the empty list. No cache read
+  /// Owner establish, then the lock, then handoff. No cache read
   /// and no socket, because there is no authenticated session yet.
   firstRun,
+
+  /// Lock only, then handoff. A persisted session proved the Owner
+  /// still exists server side, so no re-registration happens here.
+  returning,
 }
 
 /// The app root. Owns the theme, the route table, and the deep link

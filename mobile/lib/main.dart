@@ -10,6 +10,7 @@ library;
 import 'package:calcar/api/api.dart';
 import 'package:calcar/app.dart';
 import 'package:calcar/auth/biometric_gate.dart';
+import 'package:calcar/auth/session_store.dart';
 import 'package:calcar/keys/owner_keys.dart';
 import 'package:calcar/onboarding/owner_setup.dart';
 import 'package:calcar/push/push_service.dart';
@@ -43,11 +44,17 @@ const bool _ownerEstablished = bool.fromEnvironment(
   defaultValue: false,
 );
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final CalcarApiClient api = CalcarApiClient(
     baseUrl: _backendBaseUrl,
     token: _sessionToken.isEmpty ? null : _sessionToken,
   );
+  CalcarStart start =
+      _ownerEstablished ? CalcarStart.computers : CalcarStart.firstRun;
+  if (!_ownerEstablished) {
+    start = await _restoreSession(api);
+  }
   final AgentChannelClient agent = AgentChannelClient(
     baseUrl: _agentBaseUrl,
     token: _sessionToken,
@@ -91,11 +98,37 @@ void main() {
             gate: BiometricGate(),
             api: api,
             requestId: newRequestId(),
+            session: SessionStore(),
           ),
         ),
-        start: _ownerEstablished ? CalcarStart.computers : CalcarStart.firstRun,
+        start: start,
         deepLinkBus: bus,
       ),
     ),
   );
+}
+
+/// Restores the persisted Owner session when one exists and still
+/// validates server side. Returns the matching start: lock-first when
+/// the session is live, full setup otherwise. A dead token clears
+/// itself so the phone re-registers instead of failing half-open.
+Future<CalcarStart> _restoreSession(CalcarApiClient api) async {
+  final SessionStore sessions = SessionStore();
+  final OwnerSession? saved = await sessions.load();
+  if (saved == null) {
+    return CalcarStart.firstRun;
+  }
+  api.token = saved.token;
+  api.deviceId = saved.deviceId;
+  api.userId = saved.userId;
+  try {
+    await api.listDevices();
+    return CalcarStart.returning;
+  } on Object catch (_) {
+    api.clearToken();
+    api.deviceId = '';
+    api.userId = '';
+    await sessions.clear();
+    return CalcarStart.firstRun;
+  }
 }

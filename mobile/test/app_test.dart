@@ -823,7 +823,7 @@ void main() {
       );
     }
 
-    Future<void> _establish(
+    Future<void> establishAs(
       WidgetTester tester, {
       String name = 'Owner Pixel',
     }) async {
@@ -855,7 +855,7 @@ void main() {
 
         expect(find.text('No computers yet'), findsNothing);
 
-        await _establish(tester);
+        await establishAs(tester);
 
         expect(established, <String>['Owner Pixel']);
         expect(find.byKey(const ValueKey('first-run-unlock')), findsOneWidget);
@@ -887,7 +887,7 @@ void main() {
             ),
           ),
         );
-        await _establish(tester);
+        await establishAs(tester);
 
         expect(
           find.byKey(const ValueKey('first-run-owner-error')),
@@ -896,6 +896,47 @@ void main() {
         expect(find.byKey(const ValueKey('first-run-unlock')), findsNothing);
         expect(gate.calls, 0);
         expect(find.text('WIN-PC'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'contract: a returning phone starts at the lock, never re-registers',
+      (WidgetTester tester) async {
+        final _FakeGate gate = _FakeGate(LocalAuthResult.unlocked);
+        final List<String> established = <String>[];
+        final CalcarShellDeps deps = CalcarShellDeps(
+          api: _api(<http.Request>[]),
+          authGate: gate,
+          onEstablishOwner: (String displayName) async {
+            established.add(displayName);
+            return true;
+          },
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: _overrides(source: _FakeSnapshotSource()),
+            child: MaterialApp(
+              onGenerateRoute: (RouteSettings settings) => AppRoutes.generate(
+                settings,
+                deps,
+                CalcarStart.returning,
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          find.byKey(const ValueKey('first-run-owner-name')),
+          findsNothing,
+        );
+        expect(find.byKey(const ValueKey('first-run-unlock')), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('first-run-unlock')));
+        await tester.pumpAndSettle();
+
+        expect(established, isEmpty);
+        expect(gate.calls, 1);
+        expect(find.text('WIN-PC'), findsOneWidget);
       },
     );
 
@@ -912,7 +953,7 @@ void main() {
             ),
           ),
         );
-        await _establish(tester);
+        await establishAs(tester);
         await tester.tap(find.byKey(const ValueKey('first-run-unlock')));
         await tester.pumpAndSettle();
 
