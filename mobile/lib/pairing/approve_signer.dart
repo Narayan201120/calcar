@@ -51,6 +51,7 @@ Uint8List pairingContextHash({
   required int requestedAtMillis,
 }) {
   final List<int> body = <int>[];
+  bool first = true;
   for (final String field in <String>[
     displayName,
     fingerprint,
@@ -58,8 +59,11 @@ Uint8List pairingContextHash({
     sessionId,
     requestedAtMillis.toString(),
   ]) {
+    if (!first) {
+      body.add(0);
+    }
+    first = false;
     body.addAll(utf8.encode(field));
-    body.add(0);
   }
   return Uint8List.fromList(crypto.sha256.convert(body).bytes);
 }
