@@ -35,10 +35,6 @@ const String _deviceId = String.fromEnvironment(
   'CALCAR_DEVICE_ID',
   defaultValue: '',
 );
-const String _userId = String.fromEnvironment(
-  'CALCAR_USER_ID',
-  defaultValue: '',
-);
 const bool _ownerEstablished = bool.fromEnvironment(
   'CALCAR_OWNER_ESTABLISHED',
   defaultValue: false,
@@ -78,13 +74,17 @@ Future<void> main() async {
         snapshotSourceProvider.overrideWithValue(source),
         apiClientProvider.overrideWithValue(api),
         agentChannelProvider.overrideWithValue(agent),
-        socketConfigProvider.overrideWithValue(
-          const SocketConfig(
-            baseUrl: _backendBaseUrl,
-            userId: _userId,
-            token: _sessionToken,
-          ),
-        ),
+        // Derives from the live client, not the compile-time consts, so
+        // a binding mounted after login or restore dials with the real
+        // token instead of the empty one the app started with.
+        socketConfigProvider.overrideWith((Ref ref) {
+          final CalcarApiClient live = ref.watch(apiClientProvider);
+          return SocketConfig(
+            baseUrl: live.baseUrl,
+            userId: live.userId,
+            token: live.token ?? '',
+          );
+        }),
       ],
       child: CalcarApp(
         deps: CalcarShellDeps(

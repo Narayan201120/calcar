@@ -699,6 +699,19 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Socket auth still uses empty compile-time values, unchanged.
 - **Status:** Implemented
 
+## DEC-056 Socket dials with the live login token
+- **Date/Context:** Oct 1 2026, parallel research plus merge on the socket auth gap
+- **Context/What:** Two explore tracks agreed: the client already sends `?access_token=` and the hub already accepts it, but main froze the config from compile-time consts while the real token lived mutably on the api client. The socket override now derives base URL, user, and token from the live client, so any binding mounted after login or restore authenticates. Pinned by a derivation contract test.
+- **The "Why":** Every foreground socket dialed anonymous, so live join events and presence never arrived and the poll carried everything.
+- **Improvement over Previous Solution:** Replaced frozen empty credentials with derivation at mount time.
+- **Pros:**
+  - No protocol change on either side; both already spoke token query.
+  - Mount-time derivation needs no invalidation plumbing for login flows.
+- **Cons & Trade-offs:**
+  - A token change while a binding stays mounted still needs a remount; expiry re-login restarts at first run today.
+  - Research ran on two background workers and merged here; either may have missed edge creds paths.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
