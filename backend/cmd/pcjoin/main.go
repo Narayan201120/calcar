@@ -252,6 +252,13 @@ func runE2E(client *http.Client, backend, name string) {
 		fail("e2e: session reply unusable: %s", strings.TrimSpace(string(body)))
 	}
 	fmt.Printf("pcjoin: session %s pending\n", sess.SessionID)
+	fmt.Printf(
+		"pcjoin: qr=calcar://pair/v1?s=%s&r=%s&n=%s&o=%s&v=1\n",
+		sess.SessionID,
+		url.QueryEscape(backend+"/v1/pairing/sessions/"+sess.SessionID+"/join-request"),
+		url.QueryEscape(sess.QRNonce),
+		url.QueryEscape(boot.DeviceID),
+	)
 
 	fp, _, _ := joinSession(client, backend+"/v1/pairing/sessions/"+sess.SessionID+"/join-request", sess.SessionID, sess.QRNonce, name)
 	fmt.Printf("pcjoin: join accepted, fingerprint %s\n", fp)

@@ -710,3 +710,15 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - QR transfer was a manual screenshot file, no camera path yet.
   - Socket live events still unauthenticated; the poll carried the join.
 - **Status:** Implemented
+
+## DEC-055 Durable local backend without Docker
+- **Date/Context:** Oct 1 2026, every backend restart wiped all trust data and forced full re-pair
+- **Context/What:** No Docker daemon and no Postgres password on this box, so compose is unusable. Built a user-space Postgres 18 cluster on :5433 via initdb plus a user-space Redis 8 in WSL from .deb extraction, both without admin. Backend runs against both with migrations on boot. Proven by full pairing loop plus a backend restart followed by a second join correctly rejected as PAIRING_CONSUMED, meaning session plus first join survived. New scripts/dev-backend.ps1 starts the whole stack in one command.
+- **The "Why":** Amnesia on every restart made every other feature unprovable across days.
+- **Improvement over Previous Solution:** Replaced the dev-only in-memory store with Postgres plus Redis that survive restarts.
+- **Pros:**
+  - /readyz confirms both stores; pcjoin prints the QR URI for manual runs.
+- **Cons & Trade-offs:**
+  - Postgres runs on 5433 to avoid the system cluster, Redis needs WSL plus LD_LIBRARY_PATH each shell.
+  - Dev-only passwords and trust auth, localhost only, documented as such.
+- **Status:** Implemented
