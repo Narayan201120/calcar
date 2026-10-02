@@ -1,9 +1,11 @@
 // My Computers wired to devicesControllerProvider.
 //
 // One snapshot on entry, one snapshot per pull refresh, and rows derived
-// from the device snapshot alone. Workflow rows stay on computer detail:
-// a list fetch is one call by contract, so the list never fans out into
-// a snapshot per computer. Navigation stays with the host.
+// from the device snapshot alone. The empty and error frames refresh too,
+// so a stale empty list is escapable without a restart. Workflow rows stay
+// on computer detail: a list fetch is one call by contract, so the list
+// never fans out into a snapshot per computer. Navigation stays with
+// the host.
 import 'package:calcar/api/models.dart';
 import 'package:calcar/screens/computers.dart';
 import 'package:calcar/state/state.dart';
@@ -82,6 +84,8 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
   /// No managed computers yet. The pure screen owns that copy and the
   /// Add Computer affordance, so it is returned whole rather than
   /// retyped here. A failed fetch is not an empty list and says so.
+  /// Both frames carry the same refresh affordance as the list, so a
+  /// stale empty list or a failed load is escapable without a restart.
   /// The empty screen navigates to the single-use pairing route, which
   /// the shell owns, so this wrapper never builds pairing state itself.
   Widget _coldList(DevicesState state) {
@@ -92,15 +96,56 @@ class _WiredComputersScreenState extends ConsumerState<WiredComputersScreen> {
     }
     if (state.error.isNotEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('My Computers')),
-        body: Center(
-          child: Text('Could not load computers: ${state.error}'),
+        appBar: AppBar(
+          title: const Text('My Computers'),
+          actions: <Widget>[
+            IconButton(
+              key: const ValueKey('computers-refresh'),
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: _pullRefresh,
+            ),
+          ],
+        ),
+        body: RefreshIndicator(
+          onRefresh: _pullRefresh,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return SingleChildScrollView(
+                // Always scrollable so the error frame still overscrolls
+                // into pull refresh instead of swallowing the gesture.
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          'Could not load computers: ${state.error}',
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          key: const ValueKey('computers-retry'),
+                          onPressed: _pullRefresh,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       );
     }
     return ComputersScreen(
       onAddComputer: () => Navigator.of(context).pushNamed('/add-computer'),
       onOpenUpdate: () => Navigator.of(context).pushNamed('/update'),
+      onRefresh: _pullRefresh,
     );
   }
 
