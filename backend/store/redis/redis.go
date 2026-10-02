@@ -487,6 +487,9 @@ func (s *Store) ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken 
 	got, err := s.cli.Eval(ctx, consumeRefreshLua,
 		[]string{refreshKey(refreshToken), refreshIndexKey(deviceID)},
 		deviceID, refreshToken).Result()
+	if errors.Is(err, goredis.Nil) {
+		return "", store.ErrNotFound
+	}
 	if err != nil {
 		return "", fmt.Errorf("redis: consume refresh: %w", err)
 	}
