@@ -746,6 +746,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - A kill landing between idempotency-claim and PTY write still loses one input on retry, documented in router.rs failure mode 5, not asserted.
 - **Status:** Implemented
 
+## DEC-060 Refresh rotation proven live
+- **Date/Context:** Oct 2026, parallel rotation-proof track merged to main
+- **Context/What:** A worker drove double rotation, reuse rejected as revoked without leaks, dead and time-expired access restored by live refresh, and garbage refused, all against a dev backend with 2s access TTL. Verified here with 13 of 13 green on main after merge.
+- **The "Why":** Unit suites prove logic, only a live clock proves expiry behavior.
+- **Improvement over Previous Solution:** Replaced assumed rotation with time-proven rotation.
+- **Pros:**
+  - Short-TTL backend makes expiry testable in seconds, not hours.
+- **Cons & Trade-offs:**
+  - The mobile UX track still holds uncommitted work in the tree, untouched.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
