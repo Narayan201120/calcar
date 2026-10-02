@@ -12,6 +12,8 @@
 //   via setFrozen(frozen: true) on drop and loadSnapshot on reconnect.
 // - Watching [realtimeBindingProvider] keeps the foreground socket
 //   mounted; popping the last viewer disposes it and closes the socket.
+//   Later socket config emissions (token rotation while foregrounded)
+//   redial the mounted binding exactly once instead of rebuilding it.
 // - Approval sends and destructive confirm posts ride the agent channel
 //   with idempotency keys; resolveApproval here is the local guard.
 import 'dart:async';
@@ -34,6 +36,13 @@ final snapshotSourceProvider = Provider<SnapshotSource>(
       'merge step: override snapshotSourceProvider with the HTTP source',
     );
   },
+);
+
+/// Channel factory for the foreground socket. Null means the real
+/// WebSocketChannel.connect path. Tests override with a counting or
+/// throwing fake so no test dials a real socket.
+final socketChannelFactoryProvider = Provider<SocketChannelFactory?>(
+  (Ref ref) => null,
 );
 
 /// Overridden by the merge step with the authed session values.
@@ -78,23 +87,33 @@ final connectionControllerProvider =
 );
 
 /// Foreground subscription. Auto-dispose closes the socket when the
-/// last viewing widget navigates away.
+/// last viewing widget navigates away. Credential rotation does not
+/// rebuild: later [socketConfigProvider] emissions redial the mounted
+/// binding exactly once through [RealtimeBinding.updateConfig], so one
+/// token change costs one dial, a backgrounded (disposed) binding never
+/// redials, and failures reuse the client backoff path.
 final realtimeBindingProvider = Provider.autoDispose<RealtimeBinding>(
   (Ref ref) {
-    final SocketConfig config = ref.watch(socketConfigProvider);
-    final CalcarSocketClient socket = CalcarSocketClient(
-      baseUrl: config.baseUrl,
-      userId: config.userId,
-      token: config.token,
-      onConnectionLost: () {
-        ref.read(connectionControllerProvider.notifier).markDisconnected();
-      },
-      onCatchupNeeded: () {
-        ref.read(connectionControllerProvider.notifier).markCatchupNeeded();
-      },
-    );
+    final SocketConfig initial = ref.read(socketConfigProvider);
+    CalcarSocketClient buildSocket(SocketConfig config) {
+      return CalcarSocketClient(
+        baseUrl: config.baseUrl,
+        userId: config.userId,
+        token: config.token,
+        channelFactory: ref.read(socketChannelFactoryProvider),
+        onConnectionLost: () {
+          ref.read(connectionControllerProvider.notifier).markDisconnected();
+        },
+        onCatchupNeeded: () {
+          ref.read(connectionControllerProvider.notifier).markCatchupNeeded();
+        },
+      );
+    }
+
     final RealtimeBinding binding = RealtimeBinding(
-      socket: socket,
+      socket: buildSocket(initial),
+      config: initial,
+      socketFactory: buildSocket,
       onPresenceChanged: ({
         required String deviceId,
         required bool online,
@@ -130,6 +149,15 @@ final realtimeBindingProvider = Provider.autoDispose<RealtimeBinding>(
     );
     ref.onDispose(binding.dispose);
     binding.mount();
+    ref.listen<SocketConfig>(
+      socketConfigProvider,
+      (SocketConfig? previous, SocketConfig next) {
+        if (previous == next) {
+          return;
+        }
+        unawaited(binding.updateConfig(next));
+      },
+    );
     return binding;
   },
 );
