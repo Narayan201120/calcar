@@ -152,16 +152,19 @@ class RealtimeBinding {
     if (_disposed) {
       return Future<void>.value();
     }
+    // Pending first: the swap inside a flight lands synchronously, so
+    // an equality check here would mistake an in-flight rotation for a
+    // settled one and mint a second future for the same dial.
+    final Future<void>? pending = _rotation;
+    if (pending != null) {
+      return pending;
+    }
     if (next == _config) {
       return Future<void>.value();
     }
     if (!_mounted) {
       _swap(next);
       return Future<void>.value();
-    }
-    final Future<void>? pending = _rotation;
-    if (pending != null) {
-      return pending;
     }
     final Future<void> flight = _rotate(next).whenComplete(() {
       _rotation = null;
