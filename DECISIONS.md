@@ -735,6 +735,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Agent-side enforcement on stale sessions stays with the ConPTY-era hardening list.
 - **Status:** Implemented
 
+## DEC-059 Agent restart resumes the same session
+- **Date/Context:** Oct 2026, parallel resume track merged to main
+- **Context/What:** A worker proved restart recovery with a 17-check live script: kill -9 mid-run, restart on the same store files, same non-terminal state, contiguous replayed ring, no duplicated completions, pre-kill UUIDs dedupe, fresh inputs deliver. Zero Rust changes needed; the store was already the truth. Verified green here after merge.
+- **The "Why":** The P7 disconnect-survival gate means nothing until a kill loses nothing observable.
+- **Improvement over Previous Solution:** Replaced assumed recovery with a rerunnable kill-and-reattach proof.
+- **Pros:**
+  - Repeatable twice in a row, including stale-file cleanup.
+- **Cons & Trade-offs:**
+  - A kill landing between idempotency-claim and PTY write still loses one input on retry, documented in router.rs failure mode 5, not asserted.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
