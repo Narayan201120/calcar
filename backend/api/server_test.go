@@ -32,6 +32,7 @@ type fakeStore struct {
 	sessions   map[string]store.PairingSession
 	challenges map[string]challRec
 	tokens     map[string]tokRec
+	refresh    map[string]tokRec
 	presence   map[string]store.Presence
 	seen       map[string]time.Time
 	calls      []string
@@ -58,6 +59,7 @@ func newFake() *fakeStore {
 		sessions:   make(map[string]store.PairingSession),
 		challenges: make(map[string]challRec),
 		tokens:     make(map[string]tokRec),
+		refresh:    make(map[string]tokRec),
 		presence:   make(map[string]store.Presence),
 		seen:       make(map[string]time.Time),
 	}
@@ -258,7 +260,40 @@ func (f *fakeStore) RevokeDeviceTokens(_ context.Context, deviceID string) error
 			delete(f.tokens, tok)
 		}
 	}
+	for tok, t := range f.refresh {
+		if t.deviceID == deviceID {
+			delete(f.refresh, tok)
+		}
+	}
 	return nil
+}
+
+func (f *fakeStore) IssueRefreshToken(_ context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if deviceID == "" || userID == "" || ttl <= 0 {
+		return "", store.ErrConflict
+	}
+	b := make([]byte, 24)
+	_, _ = rand.Read(b)
+	tok := "rfr-" + base64.RawURLEncoding.EncodeToString(b)
+	f.refresh[tok] = tokRec{deviceID: deviceID, userID: userID, exp: time.Now().Add(ttl)}
+	return tok, nil
+}
+
+func (f *fakeStore) ConsumeRefreshToken(_ context.Context, deviceID, refreshToken string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.refresh[refreshToken]
+	if !ok || time.Now().After(t.exp) {
+		delete(f.refresh, refreshToken)
+		return "", store.ErrNotFound
+	}
+	if t.deviceID != deviceID {
+		return "", store.ErrNotFound
+	}
+	delete(f.refresh, refreshToken)
+	return t.userID, nil
 }
 
 func (f *fakeStore) SetPresence(_ context.Context, p store.Presence) error {
@@ -382,6 +417,211 @@ func authtoken(t *testing.T, srv *Server, deviceID string, priv ed25519.PrivateK
 		t.Fatalf("verify = %d %s", rec.Code, rec.Body.String())
 	}
 	return decodeBody(t, rec)["access_token"].(string)
+}
+
+// verifyPair runs challenge+verify for a device and returns both tokens.
+func verifyPair(t *testing.T, srv *Server, deviceID string, priv ed25519.PrivateKey) (string, string) {
+	t.Helper()
+	rec := doReq(t, srv, "POST", "/v1/auth/challenge", map[string]any{"device_id": deviceID}, "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("challenge = %d %s", rec.Code, rec.Body.String())
+	}
+	ch := decodeBody(t, rec)["challenge"].(string)
+	sig := ed25519.Sign(priv, []byte(ch))
+	rec = doReq(t, srv, "POST", "/v1/auth/verify", map[string]any{
+		"device_id": deviceID, "challenge": ch, "signature_b64": b64(sig),
+	}, "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify = %d %s", rec.Code, rec.Body.String())
+	}
+	m := decodeBody(t, rec)
+	return m["access_token"].(string), m["refresh_token"].(string)
+}
+
+func refreshCall(t *testing.T, srv *Server, deviceID, refresh, rid string) *httptest.ResponseRecorder {
+	t.Helper()
+	return doReq(t, srv, "POST", "/v1/auth/refresh", map[string]any{
+		"device_id": deviceID, "refresh_token": refresh,
+	}, "", rid)
+}
+
+// Verify mints both halves: a 24h access token and a 30d refresh token.
+func TestVerifyReturnsRefreshToken(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	rec := doReq(t, srv, "POST", "/v1/auth/challenge", map[string]any{"device_id": ownerID}, "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("challenge = %d %s", rec.Code, rec.Body.String())
+	}
+	ch := decodeBody(t, rec)["challenge"].(string)
+	rec = doReq(t, srv, "POST", "/v1/auth/verify", map[string]any{
+		"device_id": ownerID, "challenge": ch,
+		"signature_b64": b64(ed25519.Sign(ownerPriv, []byte(ch))),
+	}, "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify = %d %s", rec.Code, rec.Body.String())
+	}
+	m := decodeBody(t, rec)
+	if m["access_token"] == "" || m["refresh_token"] == "" {
+		t.Fatalf("verify missing token half: %v", m)
+	}
+	if m["access_token"] == m["refresh_token"] {
+		t.Fatal("access and refresh tokens must differ")
+	}
+	if m["token_type"] != "bearer" {
+		t.Fatalf("token_type = %v, want bearer", m["token_type"])
+	}
+	if m["expires_in_seconds"] != float64(24*60*60) {
+		t.Fatalf("expires_in_seconds = %v, want 86400", m["expires_in_seconds"])
+	}
+	if m["refresh_expires_in_seconds"] != float64(30*24*60*60) {
+		t.Fatalf("refresh_expires_in_seconds = %v, want 2592000", m["refresh_expires_in_seconds"])
+	}
+}
+
+// Refresh happy path: one refresh token rotates into a fresh pair, and
+// both the new access token and the new refresh token work.
+func TestRefreshHappyPathRotation(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	_, rfr := verifyPair(t, srv, ownerID, ownerPriv)
+
+	rec := refreshCall(t, srv, ownerID, rfr, freshRID())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("refresh = %d %s", rec.Code, rec.Body.String())
+	}
+	m := decodeBody(t, rec)
+	newAcc, ok1 := m["access_token"].(string)
+	newRfr, ok2 := m["refresh_token"].(string)
+	if !ok1 || newAcc == "" || !ok2 || newRfr == "" {
+		t.Fatalf("refresh missing token half: %v", m)
+	}
+	if newRfr == rfr {
+		t.Fatal("rotation must mint a fresh refresh token")
+	}
+	if m["token_type"] != "bearer" || m["expires_in_seconds"] != float64(24*60*60) ||
+		m["refresh_expires_in_seconds"] != float64(30*24*60*60) {
+		t.Fatalf("refresh shape = %v", m)
+	}
+	// New access token authorizes.
+	if rec := doReq(t, srv, "GET", "/v1/devices", nil, newAcc, ""); rec.Code != http.StatusOK {
+		t.Fatalf("devices with rotated token = %d %s", rec.Code, rec.Body.String())
+	}
+	// New refresh token chains into a second rotation.
+	if rec := refreshCall(t, srv, ownerID, newRfr, freshRID()); rec.Code != http.StatusOK {
+		t.Fatalf("second rotation = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Rotation is single-use: replaying a consumed refresh token fails with
+// 401 REVOKED and never leaks the token back in the error body.
+func TestRefreshReuseRejected(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	_, rfr := verifyPair(t, srv, ownerID, ownerPriv)
+
+	if rec := refreshCall(t, srv, ownerID, rfr, freshRID()); rec.Code != http.StatusOK {
+		t.Fatalf("first refresh = %d %s", rec.Code, rec.Body.String())
+	}
+	rec := refreshCall(t, srv, ownerID, rfr, freshRID())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("reused refresh = %d, want 401", rec.Code)
+	}
+	if decodeBody(t, rec)["error"] != trust.CodeRevoked {
+		t.Fatalf("reused refresh code = %s", rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte(rfr)) {
+		t.Fatalf("error leaks refresh token: %s", rec.Body.String())
+	}
+}
+
+// Unknown, garbage, or device-mismatched refresh tokens fail closed with
+// 401 REVOKED. Each subtest fails for exactly one reason.
+func TestRefreshUnknownRejected(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	_, rfr := verifyPair(t, srv, ownerID, ownerPriv)
+
+	t.Run("garbage", func(t *testing.T) {
+		rec := refreshCall(t, srv, ownerID, "garbage-refresh-xyz", freshRID())
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("garbage refresh = %d, want 401", rec.Code)
+		}
+		if decodeBody(t, rec)["error"] != trust.CodeRevoked {
+			t.Fatalf("garbage refresh code = %s", rec.Body.String())
+		}
+	})
+	t.Run("device mismatch", func(t *testing.T) {
+		rec := refreshCall(t, srv, "PH-SOMEONE-ELSE", rfr, freshRID())
+		if rec.Code != http.StatusUnauthorized && rec.Code != http.StatusNotFound {
+			t.Fatalf("mismatched refresh = %d, want 401 or 404", rec.Code)
+		}
+	})
+	t.Run("missing fields", func(t *testing.T) {
+		rec := doReq(t, srv, "POST", "/v1/auth/refresh", map[string]any{"device_id": ownerID}, "", freshRID())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("missing refresh_token = %d, want 400", rec.Code)
+		}
+		if decodeBody(t, rec)["error"] != trust.CodeInvalidInput {
+			t.Fatalf("missing field code = %s", rec.Body.String())
+		}
+	})
+	t.Run("missing request id", func(t *testing.T) {
+		rec := refreshCall(t, srv, ownerID, rfr, "")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("missing rid = %d, want 400", rec.Code)
+		}
+		if decodeBody(t, rec)["error"] != "MISSING_REQUEST_ID" {
+			t.Fatalf("missing rid code = %s", rec.Body.String())
+		}
+	})
+}
+
+// A revoked device cannot refresh: the token is already dead from
+// RevokeDeviceTokens (401) or the device record fails closed (403).
+// Either way the code is REVOKED.
+func TestRefreshRevokedDeviceRejected(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	ownerTok, rfr := verifyPair(t, srv, ownerID, ownerPriv)
+
+	rec := doReq(t, srv, "POST", "/v1/devices/"+ownerID+"/revoke", map[string]any{"reason": "lost"}, ownerTok, freshRID())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("revoke = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = refreshCall(t, srv, ownerID, rfr, freshRID())
+	if rec.Code != http.StatusUnauthorized && rec.Code != http.StatusForbidden {
+		t.Fatalf("revoked refresh = %d, want 401 or 403", rec.Code)
+	}
+	if decodeBody(t, rec)["error"] != trust.CodeRevoked {
+		t.Fatalf("revoked refresh code = %s", rec.Body.String())
+	}
+}
+
+// Refresh is a mutation: reusing an X-Request-ID fails with 409
+// REPLAYED_ID even when the second body carries a live token.
+func TestRefreshReplayedRequestID409(t *testing.T) {
+	srv, _ := newTestServer()
+	_, ownerID, _, ownerPriv := bootstrapOwner(t, srv, "Owner")
+	_, rfr := verifyPair(t, srv, ownerID, ownerPriv)
+
+	rid := freshRID()
+	first := refreshCall(t, srv, ownerID, rfr, rid)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first refresh = %d %s", first.Code, first.Body.String())
+	}
+	live := decodeBody(t, first)["refresh_token"].(string)
+	rec := refreshCall(t, srv, ownerID, live, rid)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("replayed rid = %d, want 409", rec.Code)
+	}
+	if decodeBody(t, rec)["error"] != trust.CodeReplayedID {
+		t.Fatalf("replayed rid code = %s", rec.Body.String())
+	}
+	// The replay burn nothing: the live token still rotates with a new key.
+	if rec := refreshCall(t, srv, ownerID, live, freshRID()); rec.Code != http.StatusOK {
+		t.Fatalf("live token after replay = %d %s", rec.Code, rec.Body.String())
+	}
 }
 
 func createSession(t *testing.T, srv *Server, token string) map[string]any {

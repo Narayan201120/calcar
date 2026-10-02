@@ -9,15 +9,17 @@ import (
 
 func TestKeyNamespaces(t *testing.T) {
 	cases := map[string]string{
-		pairingKey("s1"):    "pairing:s1",
-		presenceKey("d1"):   "presence:d1",
-		connKey("c1"):       "conn:c1",
-		tokenKey("t1"):      "tokens:t1",
-		tokenIndexKey("d1"): "tokens_by_device:d1",
-		challengeKey("d1"):  "challenges:d1",
-		replayKey("r1"):     "replay:r1",
-		notifyKey("u1"):     "notify:u1",
-		pushTokensKey("d1"): "pushtokens:d1",
+		pairingKey("s1"):      "pairing:s1",
+		presenceKey("d1"):     "presence:d1",
+		connKey("c1"):         "conn:c1",
+		tokenKey("t1"):        "tokens:t1",
+		tokenIndexKey("d1"):   "tokens_by_device:d1",
+		refreshKey("t1"):      "refresh:t1",
+		refreshIndexKey("d1"): "refresh_by_device:d1",
+		challengeKey("d1"):    "challenges:d1",
+		replayKey("r1"):       "replay:r1",
+		notifyKey("u1"):       "notify:u1",
+		pushTokensKey("d1"):   "pushtokens:d1",
 	}
 	for got, want := range cases {
 		if got != want {
@@ -27,6 +29,7 @@ func TestKeyNamespaces(t *testing.T) {
 	seen := map[string]bool{}
 	for _, k := range []string{
 		pairingKey("x"), presenceKey("x"), connKey("x"), tokenKey("x"),
+		tokenIndexKey("x"), refreshKey("x"), refreshIndexKey("x"),
 		challengeKey("x"), replayKey("x"), notifyKey("x"), pushTokensKey("x"),
 	} {
 		prefix := k[:strings.Index(k, ":")+1]

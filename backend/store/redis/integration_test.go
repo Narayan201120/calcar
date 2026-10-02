@@ -84,6 +84,58 @@ func TestIntegrationTokenLifecycle(t *testing.T) {
 	}
 }
 
+func TestIntegrationRefreshRotation(t *testing.T) {
+	ctx := context.Background()
+	s := mustRedis(t)
+	device := testID(t, "dev")
+
+	rfr, err := s.IssueRefreshToken(ctx, device, "user-1", 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("issue refresh: %v", err)
+	}
+	if rfr == "" {
+		t.Fatal("empty refresh token")
+	}
+	// Refresh tokens never resolve as access bearers.
+	if _, _, err := s.ResolveAccessToken(ctx, rfr); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("refresh as access err = %v, want ErrNotFound", err)
+	}
+	user, err := s.ConsumeRefreshToken(ctx, device, rfr)
+	if err != nil {
+		t.Fatalf("consume: %v", err)
+	}
+	if user != "user-1" {
+		t.Errorf("consumed user = %q, want user-1", user)
+	}
+	// Single use: second consume fails.
+	if _, err := s.ConsumeRefreshToken(ctx, device, rfr); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("second consume err = %v, want ErrNotFound", err)
+	}
+	// Device mismatch fails closed and burns nothing: a fresh token for the
+	// device still consumes afterwards.
+	rfr2, err := s.IssueRefreshToken(ctx, device, "user-1", 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("issue refresh 2: %v", err)
+	}
+	if _, err := s.ConsumeRefreshToken(ctx, "other-device", rfr2); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("mismatch consume err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.ConsumeRefreshToken(ctx, device, rfr2); err != nil {
+		t.Errorf("consume after mismatch: %v", err)
+	}
+	// Revoke drops refresh tokens alongside access tokens.
+	rfr3, err := s.IssueRefreshToken(ctx, device, "user-1", 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("issue refresh 3: %v", err)
+	}
+	if err := s.RevokeDeviceTokens(ctx, device); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	if _, err := s.ConsumeRefreshToken(ctx, device, rfr3); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("consume after revoke err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestIntegrationChallengeSingleUse(t *testing.T) {
 	ctx := context.Background()
 	s := mustRedis(t)

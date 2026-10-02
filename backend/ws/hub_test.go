@@ -118,6 +118,12 @@ func (f *wsfake) IssueAccessToken(_ context.Context, _, _ string, _ time.Duratio
 	return "", nil
 }
 func (f *wsfake) RevokeDeviceTokens(_ context.Context, _ string) error { return nil }
+func (f *wsfake) IssueRefreshToken(_ context.Context, _, _ string, _ time.Duration) (string, error) {
+	return "", nil
+}
+func (f *wsfake) ConsumeRefreshToken(_ context.Context, _, _ string) (string, error) {
+	return "", store.ErrNotFound
+}
 func (f *wsfake) SetPushToken(_ context.Context, _, _, _ string) error { return nil }
 func (f *wsfake) CheckAndMarkRequest(_ context.Context, _ string, _ time.Duration) error {
 	return nil

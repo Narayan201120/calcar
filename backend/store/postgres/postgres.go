@@ -484,6 +484,14 @@ func (s *Store) RevokeDeviceTokens(ctx context.Context, deviceID string) error {
 	return errNeedsRedis
 }
 
+func (s *Store) IssueRefreshToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	return "", errNeedsRedis
+}
+
+func (s *Store) ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken string) (string, error) {
+	return "", errNeedsRedis
+}
+
 func (s *Store) EnqueueAttention(ctx context.Context, userID string, a store.Attention) error {
 	return errNeedsRedis
 }

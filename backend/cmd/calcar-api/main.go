@@ -1,7 +1,7 @@
 // Command calcar-api runs the P3 HTTP control plane plus WS signals.
 //
 // Env: PORT (default 8080), PG_DSN, REDIS_ADDR, TOKEN_TTL (durations
-// like "24h", default 24h).
+// like "24h", default 24h), REFRESH_TTL (default 720h = 30d).
 //
 // With PG_DSN and REDIS_ADDR set, main runs migrations (which block
 // startup on failure) and wires the combined Postgres+Redis store via
@@ -49,6 +49,13 @@ func main() {
 			log.Fatalf("calcar-api: bad TOKEN_TTL %q: %v", raw, err)
 		}
 		srv.TokenTTL = d
+	}
+	if raw := strings.TrimSpace(os.Getenv("REFRESH_TTL")); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil || d <= 0 {
+			log.Fatalf("calcar-api: bad REFRESH_TTL %q: %v", raw, err)
+		}
+		srv.RefreshTTL = d
 	}
 	srv.Hub().Go()
 	defer srv.Hub().Close()
@@ -120,6 +127,7 @@ type memStore struct {
 	grants     []store.TrustGrant
 	challenges map[string]memChallenge
 	tokens     map[string]memToken
+	refresh    map[string]memToken
 	presence   map[string]store.Presence
 	seen       map[string]time.Time
 	revokedBy  map[string]string
@@ -131,6 +139,7 @@ func newMemStore() *memStore {
 		sessions:   make(map[string]store.PairingSession),
 		challenges: make(map[string]memChallenge),
 		tokens:     make(map[string]memToken),
+		refresh:    make(map[string]memToken),
 		presence:   make(map[string]store.Presence),
 		seen:       make(map[string]time.Time),
 		revokedBy:  make(map[string]string),
@@ -336,7 +345,38 @@ func (m *memStore) RevokeDeviceTokens(_ context.Context, deviceID string) error 
 			delete(m.tokens, tok)
 		}
 	}
+	for tok, t := range m.refresh {
+		if t.deviceID == deviceID {
+			delete(m.refresh, tok)
+		}
+	}
 	return nil
+}
+
+func (m *memStore) IssueRefreshToken(_ context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if deviceID == "" || userID == "" || ttl <= 0 {
+		return "", store.ErrConflict
+	}
+	tok := "rfr-" + memRand(24)
+	m.refresh[tok] = memToken{deviceID: deviceID, userID: userID, exp: time.Now().Add(ttl)}
+	return tok, nil
+}
+
+func (m *memStore) ConsumeRefreshToken(_ context.Context, deviceID, refreshToken string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, ok := m.refresh[refreshToken]
+	if !ok || time.Now().After(t.exp) {
+		delete(m.refresh, refreshToken)
+		return "", store.ErrNotFound
+	}
+	if t.deviceID != deviceID {
+		return "", store.ErrNotFound
+	}
+	delete(m.refresh, refreshToken)
+	return t.userID, nil
 }
 
 func (m *memStore) SetPresence(_ context.Context, p store.Presence) error {

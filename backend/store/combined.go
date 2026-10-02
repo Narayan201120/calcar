@@ -170,6 +170,14 @@ func (c *combined) RevokeDeviceTokens(ctx context.Context, deviceID string) erro
 	return c.rd.RevokeDeviceTokens(ctx, deviceID)
 }
 
+func (c *combined) IssueRefreshToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	return c.rd.IssueRefreshToken(ctx, deviceID, userID, ttl)
+}
+
+func (c *combined) ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken string) (string, error) {
+	return c.rd.ConsumeRefreshToken(ctx, deviceID, refreshToken)
+}
+
 // SetPresence writes live TTL state, then best-effort audit. The audit write
 // never fails a heartbeat: presence is inherently ephemeral and a Postgres
 // blip must not mark devices offline.
