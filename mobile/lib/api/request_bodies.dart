@@ -69,6 +69,18 @@ Map<String, dynamic> buildVerifyBody({
   };
 }
 
+/// POST /v1/auth/refresh. Single-use refresh token, rotated on every
+/// call: the response carries the next one.
+Map<String, dynamic> buildRefreshBody({
+  required String deviceId,
+  required String refreshToken,
+}) {
+  return <String, dynamic>{
+    'device_id': deviceId,
+    'refresh_token': refreshToken,
+  };
+}
+
 /// POST /v1/devices/{id}/revoke.
 Map<String, dynamic> buildRevokeBody({String reason = ''}) {
   return <String, dynamic>{'reason': reason};

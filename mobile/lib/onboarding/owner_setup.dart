@@ -51,7 +51,7 @@ Future<bool> establishOwner({
     // token on the client for every call after this one.
     final ChallengeResponse ch = await api.challenge(boot.deviceId);
     final List<int> sig = await keys.sign(utf8.encode(ch.challenge));
-    await api.verify(
+    final TokenResponse pair = await api.verify(
       deviceId: boot.deviceId,
       challenge: ch.challenge,
       signatureB64: base64Encode(sig),
@@ -67,6 +67,7 @@ Future<bool> establishOwner({
         deviceId: boot.deviceId,
         userId: boot.userId,
         token: token,
+        refreshToken: pair.refreshToken,
       ),
     );
     return true;

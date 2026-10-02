@@ -712,6 +712,18 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - Research ran on two background workers and merged here; either may have missed edge creds paths.
 - **Status:** Implemented
 
+## DEC-057 Token rotation plus cache merge
+- **Date/Context:** Oct 2026, parallel tracks for rotation and cache merged to main
+- **Context/What:** Backend mints single-use 30d refresh tokens beside 24h access on verify, with a new idempotent refresh endpoint plus store seam across Redis, Postgres stubs, and the dev memStore, proven by backend suites green locally. The phone stores the refresh half, rotates on restore before surrendering to setup, renders refresh in the client, and reads plus writes the SQLite device cache around every fetch. A mid-merge branch tangle from the two workers was sorted by merging exact commits, never tips.
+- **The "Why":** Token death forced full Owner setup daily, and every open refetched from zero with no offline frame.
+- **Improvement over Previous Solution:** Replaced setup-on-expiry with silent rotation, and network-or-nothing boot with a cached frame plus live refresh.
+- **Pros:**
+  - Contract first: refresh shapes fixed by the backend worker, phone built to them.
+- **Cons & Trade-offs:**
+  - Push plugins still need a user-owned Firebase project, explicitly deferred.
+  - PC join stays screenshot-assisted until a scanner lands.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.

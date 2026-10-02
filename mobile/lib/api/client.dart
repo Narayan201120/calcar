@@ -20,6 +20,10 @@ class CalcarApiClient {
   /// Current bearer token, null when logged out.
   String? token;
 
+  /// Current refresh token, empty until a backend that mints pairs.
+  /// Single use: every refresh call replaces it with the next one.
+  String refreshToken = '';
+
   /// This phone's user id from bootstrap, empty until Owner setup
   /// completes. Routing hint alongside deviceId, never proof.
   String userId = '';
@@ -76,6 +80,35 @@ class CalcarApiClient {
     );
     final TokenResponse resp = TokenResponse.fromJson(body);
     token = resp.accessToken;
+    refreshToken = resp.refreshToken;
+    return resp;
+  }
+
+  /// POST /v1/auth/refresh. Rotates the single-use refresh token and
+  /// stores the fresh access token. Needs `X-Request-ID`. Throws on
+  /// reuse, which means another client consumed the rotation.
+  Future<TokenResponse> refresh({
+    required String deviceId,
+    required String requestId,
+  }) async {
+    if (refreshToken.isEmpty) {
+      throw StateError('no refresh token to rotate');
+    }
+    final Map<String, dynamic> body = _checked(
+      await _http.post(
+        _uri('/v1/auth/refresh'),
+        headers: _headers(requestId: requestId),
+        body: jsonEncode(
+          buildRefreshBody(
+            deviceId: deviceId,
+            refreshToken: refreshToken,
+          ),
+        ),
+      ),
+    );
+    final TokenResponse resp = TokenResponse.fromJson(body);
+    token = resp.accessToken;
+    refreshToken = resp.refreshToken;
     return resp;
   }
 

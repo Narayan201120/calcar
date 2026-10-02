@@ -132,17 +132,22 @@ class ChallengeResponse {
   }
 }
 
-/// Short-lived opaque token: `{access_token, token_type,
-/// expires_in_seconds}`.
+/// Short-lived opaque token pair: `{access_token, token_type,
+/// expires_in_seconds, refresh_token, refresh_expires_in_seconds}`.
+/// Refresh fields stay empty on older backends that mint access only.
 class TokenResponse {
   final String accessToken;
   final String tokenType;
   final int expiresInSeconds;
+  final String refreshToken;
+  final int refreshExpiresInSeconds;
 
   const TokenResponse({
     required this.accessToken,
     required this.tokenType,
     required this.expiresInSeconds,
+    this.refreshToken = '',
+    this.refreshExpiresInSeconds = 0,
   });
 
   factory TokenResponse.fromJson(Map<String, dynamic> json) {
@@ -150,6 +155,8 @@ class TokenResponse {
       accessToken: json['access_token']?.toString() ?? '',
       tokenType: json['token_type']?.toString() ?? '',
       expiresInSeconds: _asInt(json['expires_in_seconds']),
+      refreshToken: json['refresh_token']?.toString() ?? '',
+      refreshExpiresInSeconds: _asInt(json['refresh_expires_in_seconds']),
     );
   }
 }

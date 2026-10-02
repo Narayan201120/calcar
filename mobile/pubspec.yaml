@@ -21,6 +21,7 @@ dependencies:
   qr_flutter: ^4.1.0
   protobuf: ^6.1.0
   fixnum: ^1.1.1
+  sqflite: ^2.4.0
   web_socket_channel: ^3.0.2
 
 dev_dependencies:

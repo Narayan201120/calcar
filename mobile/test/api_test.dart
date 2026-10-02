@@ -323,5 +323,55 @@ void main() {
       await client.listDevices();
       expect(seenAuth, <String?>['Bearer fresh-tok']);
     });
+
+    test('contract: refresh rotates both tokens with idempotency', () async {
+      String? seenRequestId;
+      dynamic seenBody;
+      final CalcarApiClient client = CalcarApiClient(
+        baseUrl: 'https://backend.test',
+        httpClient: MockClient((http.Request request) async {
+          seenRequestId = request.headers['X-Request-ID'];
+          seenBody = jsonDecode(request.body);
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'tok-2',
+              'token_type': 'bearer',
+              'expires_in_seconds': 86400,
+              'refresh_token': 'rfr-2',
+              'refresh_expires_in_seconds': 2592000,
+            },),
+            200,
+            headers: <String, String>{'Content-Type': 'application/json'},
+          );
+        }),
+      );
+      client.refreshToken = 'rfr-1';
+      final TokenResponse token = await client.refresh(
+        deviceId: 'PH-1',
+        requestId: 'req-9',
+      );
+      expect(token.accessToken, 'tok-2');
+      expect(token.refreshToken, 'rfr-2');
+      expect(client.token, 'tok-2');
+      expect(client.refreshToken, 'rfr-2');
+      expect(seenRequestId, 'req-9');
+      expect(
+        seenBody,
+        <String, dynamic>{'device_id': 'PH-1', 'refresh_token': 'rfr-1'},
+      );
+    });
+
+    test('contract: refresh without a stored token refuses locally', () async {
+      final CalcarApiClient client = CalcarApiClient(
+        baseUrl: 'https://backend.test',
+        httpClient: MockClient((http.Request request) async {
+          return http.Response('{}', 200);
+        }),
+      );
+      expect(
+        () => client.refresh(deviceId: 'PH-1', requestId: 'req-9'),
+        throwsStateError,
+      );
+    });
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:calcar/api/api.dart';
+import 'package:calcar/auth/session_store.dart';
 import 'package:calcar/keys/owner_keys.dart';
 import 'package:calcar/onboarding/owner_setup.dart';
 import 'package:calcar/screens/first_run.dart';
@@ -93,6 +94,8 @@ CalcarApiClient _api({required int status}) {
             'access_token': 'tok-owner-1',
             'token_type': 'bearer',
             'expires_in_seconds': 86400,
+            'refresh_token': 'tok-refresh-1',
+            'refresh_expires_in_seconds': 2592000,
           }),
           200,
           headers: <String, String>{'Content-Type': jsonMime},
@@ -132,6 +135,7 @@ void main() {
         expect(keys.calls, <String>['generate']);
         expect(await keys.hasKey(), isTrue);
         expect(api.token, 'tok-owner-1');
+        expect(api.refreshToken, 'tok-refresh-1');
         expect(api.deviceId, 'PH-1');
       },
     );
@@ -200,6 +204,33 @@ void main() {
           requestId: 'req-1',
         );
         expect(ok, isFalse);
+      },
+    );
+
+    test(
+      'contract: setup persists the rotated refresh token with the session',
+      () async {
+        final _MapStore backing = _MapStore();
+        final SessionStore sessions = SessionStore(store: backing);
+        final CalcarApiClient api = _api(status: 201);
+        final bool ok = await establishOwner(
+          displayName: 'Owner',
+          keys: _Keys(),
+          gate: _Gate(LocalAuthResult.unlocked),
+          api: api,
+          requestId: 'req-1',
+          session: sessions,
+        );
+        expect(ok, isTrue);
+        expect(
+          await sessions.load(),
+          const OwnerSession(
+            deviceId: 'PH-1',
+            userId: 'user-1',
+            token: 'tok-owner-1',
+            refreshToken: 'tok-refresh-1',
+          ),
+        );
       },
     );
   });

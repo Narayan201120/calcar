@@ -11,6 +11,9 @@ import 'package:calcar/api/api.dart';
 import 'package:calcar/app.dart';
 import 'package:calcar/auth/biometric_gate.dart';
 import 'package:calcar/auth/session_store.dart';
+import 'package:calcar/cache/cache_source.dart';
+import 'package:calcar/cache/cache_store.dart';
+import 'package:calcar/cache/sqflite_cache_db.dart';
 import 'package:calcar/keys/owner_keys.dart';
 import 'package:calcar/onboarding/owner_setup.dart';
 import 'package:calcar/push/push_service.dart';
@@ -55,7 +58,19 @@ Future<void> main() async {
     baseUrl: _agentBaseUrl,
     token: _sessionToken,
   );
-  final SnapshotSource source = HttpSnapshotSource(api: api, agent: agent);
+  final SnapshotSource plain = HttpSnapshotSource(api: api, agent: agent);
+  // The cache must never block boot: a broken database falls back to
+  // the live source with an empty cold start instead of a dead app.
+  SnapshotSource source = plain;
+  ColdStartSource coldStart = const EmptyColdStartSource();
+  try {
+    final CacheStore store = CacheStore(db: await SqfliteCacheDb.open());
+    source = WriteThroughSnapshotSource(inner: plain, store: store);
+    coldStart = CacheBackedColdStartSource(store: store);
+  } on Object catch (_) {
+    source = plain;
+    coldStart = const EmptyColdStartSource();
+  }
   final DeepLinkBus bus = DeepLinkBus();
 
   // Push registers after the shell is up. Token sources arrive with the
@@ -72,6 +87,7 @@ Future<void> main() async {
     ProviderScope(
       overrides: <Override>[
         snapshotSourceProvider.overrideWithValue(source),
+        coldStartSourceProvider.overrideWithValue(coldStart),
         apiClientProvider.overrideWithValue(api),
         agentChannelProvider.overrideWithValue(agent),
         // Derives from the live client, not the compile-time consts, so
@@ -109,8 +125,9 @@ Future<void> main() async {
 }
 
 /// Restores the persisted Owner session when one exists and still
-/// validates server side. Returns the matching start: lock-first when
-/// the session is live, full setup otherwise. A dead token clears
+/// validates server side. A dead access token gets one rotation attempt
+/// before giving up. Returns the matching start: lock-first when the
+/// session is live, full setup otherwise. A fully dead session clears
 /// itself so the phone re-registers instead of failing half-open.
 Future<CalcarStart> _restoreSession(CalcarApiClient api) async {
   final SessionStore sessions = SessionStore();
@@ -119,16 +136,35 @@ Future<CalcarStart> _restoreSession(CalcarApiClient api) async {
     return CalcarStart.firstRun;
   }
   api.token = saved.token;
+  api.refreshToken = saved.refreshToken;
   api.deviceId = saved.deviceId;
   api.userId = saved.userId;
   try {
     await api.listDevices();
     return CalcarStart.returning;
   } on Object catch (_) {
-    api.clearToken();
-    api.deviceId = '';
-    api.userId = '';
-    await sessions.clear();
-    return CalcarStart.firstRun;
+    // One rotation attempt with the persisted refresh token before
+    // surrendering to full setup. Rotation is single use server side,
+    // so the stored pair updates together or not at all.
+    try {
+      await api.refresh(deviceId: saved.deviceId, requestId: newRequestId());
+      await api.listDevices();
+      await sessions.save(
+        OwnerSession(
+          deviceId: saved.deviceId,
+          userId: saved.userId,
+          token: api.token ?? '',
+          refreshToken: api.refreshToken,
+        ),
+      );
+      return CalcarStart.returning;
+    } on Object catch (_) {
+      api.clearToken();
+      api.refreshToken = '';
+      api.deviceId = '';
+      api.userId = '';
+      await sessions.clear();
+      return CalcarStart.firstRun;
+    }
   }
 }

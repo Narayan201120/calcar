@@ -11,11 +11,13 @@ class OwnerSession {
   final String deviceId;
   final String userId;
   final String token;
+  final String refreshToken;
 
   const OwnerSession({
     required this.deviceId,
     required this.userId,
     required this.token,
+    this.refreshToken = '',
   });
 
   @override
@@ -23,11 +25,12 @@ class OwnerSession {
     return other is OwnerSession &&
         other.deviceId == deviceId &&
         other.userId == userId &&
-        other.token == token;
+        other.token == token &&
+        other.refreshToken == refreshToken;
   }
 
   @override
-  int get hashCode => Object.hash(deviceId, userId, token);
+  int get hashCode => Object.hash(deviceId, userId, token, refreshToken);
 }
 
 class SessionStore {
@@ -37,6 +40,7 @@ class SessionStore {
   static const String deviceKey = 'calcar_session_device';
   static const String userKey = 'calcar_session_user';
   static const String tokenKey = 'calcar_session_token';
+  static const String refreshKey = 'calcar_session_refresh';
 
   final SeedStore _store;
 
@@ -44,6 +48,7 @@ class SessionStore {
     await _store.write(deviceKey, session.deviceId);
     await _store.write(userKey, session.userId);
     await _store.write(tokenKey, session.token);
+    await _store.write(refreshKey, session.refreshToken);
   }
 
   Future<OwnerSession?> load() async {
@@ -59,12 +64,18 @@ class SessionStore {
       await clear();
       return null;
     }
-    return OwnerSession(deviceId: deviceId, userId: userId, token: token);
+    return OwnerSession(
+      deviceId: deviceId,
+      userId: userId,
+      token: token,
+      refreshToken: await _store.read(refreshKey) ?? '',
+    );
   }
 
   Future<void> clear() async {
     await _store.delete(deviceKey);
     await _store.delete(userKey);
     await _store.delete(tokenKey);
+    await _store.delete(refreshKey);
   }
 }
