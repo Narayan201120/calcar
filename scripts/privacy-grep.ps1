@@ -35,8 +35,14 @@ $CanaryKey = "sk-canary-9F8E7D6C5B4A"
 
 Log "start os=$([Environment]::OSVersion.VersionString)"
 Set-Location (Join-Path $RepoRoot "agent")
+# cargo prints status to stderr, which reads as failure under the
+# stop-on-error preference. Run it permissively, then judge by the
+# exit code alone.
+$prevPref = $ErrorActionPreference; $ErrorActionPreference = "Continue"
 cargo build -p calcar-connect 2>&1 | Select-Object -Last 1 | Tee-Object -Append -FilePath $LogFile
-if ($LASTEXITCODE -ne 0) { Log "FAIL cargo build"; exit 1 }
+$buildCode = $LASTEXITCODE
+$ErrorActionPreference = $prevPref
+if ($buildCode -ne 0) { Log "FAIL cargo build"; exit 1 }
 
 Set-Content (Join-Path $T "token.txt") -NoNewline -Value $Token
 Set-Content (Join-Path $T "agent.conf") -Value @(
@@ -95,11 +101,25 @@ print(n)"
   $snapText = $snap | ConvertTo-Json -Compress -Depth 4
   Check "snapshot-clean" ($snapText -notmatch $CanaryPrompt -and $snapText -notmatch $CanaryKey) "leak in snapshot body"
 
-  # Reported, not failed: resolve_payload retains the input text and
-  # nothing ever reads it. Retention decision is a follow-up, not this
-  # gate, but the sweep must say it out loud every run.
-  $retained = & 'C:\Program Files\Python312\python.exe' -c 'import sqlite3; c=sqlite3.connect(r"C:\Users\naray\AppData\Local\Temp\calcar-privacy\agent.db"); rows=c.execute("SELECT request_id, resolve_payload FROM pending_requests").fetchall(); print(repr(rows))'
-  Check "resolve-payload-drops-input-text" ($retained -notmatch $CanaryPrompt -and $retained -notmatch $CanaryKey) "retained=$retained"
+  # resolve_payload must not retain workflow input text (DEC-040 removed
+  # the only writer; the sweep asserts the column stays clean every run).
+  $PyCheck = Join-Path $T "check_resolve.py"
+  Set-Content $PyCheck 'import os, sqlite3'
+  Add-Content $PyCheck ('c = sqlite3.connect(r"' + $T + '\agent.db")')
+  Add-Content $PyCheck 'n = 0'
+  Add-Content $PyCheck 'prom = os.environ.get("CALCAR_CANARY_PROMPT", "")'
+  Add-Content $PyCheck 'key = os.environ.get("CALCAR_CANARY_KEY", "")'
+  Add-Content $PyCheck 'for (v,) in c.execute("SELECT resolve_payload FROM pending_requests"):'
+  Add-Content $PyCheck '    s = v if isinstance(v, bytes) else (v or "").encode()'
+  Add-Content $PyCheck '    ux = (prom and prom.encode() in s) or (key and key.encode() in s)'
+  Add-Content $PyCheck '    if ux: n += 1'
+  Add-Content $PyCheck 'print(n)'
+  $env:CALCAR_CANARY_PROMPT = $CanaryPrompt
+  $env:CALCAR_CANARY_KEY = $CanaryKey
+  $retained = & 'C:\Program Files\Python312\python.exe' $PyCheck
+  Remove-Item Env:\CALCAR_CANARY_PROMPT -ErrorAction SilentlyContinue
+  Remove-Item Env:\CALCAR_CANARY_KEY -ErrorAction SilentlyContinue
+  Check "resolve-payload-drops-input-text" ($retained.Trim() -eq "0") "retained=$retained"
 
   Set-Location $RepoRoot
   if ($failures -eq 0) { Log "GREEN telemetry clean, tail holds the canary" } else { Log "RED failures=$failures"; exit 1 }

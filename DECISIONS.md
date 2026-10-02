@@ -757,6 +757,18 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - The mobile UX track still holds uncommitted work in the tree, untouched.
 - **Status:** Implemented
 
+## DEC-061 Privacy green on the final tree plus SLO runbook
+- **Date/Context:** Oct 2026, P8 gate assembly wave
+- **Context/What:** Manual audit passed all surfaces with zero content hits, then the automated canary gate itself needed two harness repairs: cargo stderr tripping stop-on-error, and a stale hardcoded DB path in the resolve check. The gate now runs green end to end on the final tree. The SLO plus metrics runbook landed as docs/slos.md with every target grounded in an existing script, log, or suite, and unmeasurable items marked open instead of invented.
+- **The "Why":** A red gate from harness rot reads the same as a leak. Both had to go green honestly.
+- **Improvement over Previous Solution:** Replaced assumed privacy with a rerun verdict, and deferred metrics with written SLOs.
+- **Pros:**
+  - Canary executes, tail holds it, everything else clean.
+- **Cons & Trade-offs:**
+  - Server latency percentiles stay open; no emitter exists yet.
+  - Push still needs the user-owned Firebase project.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
