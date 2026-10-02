@@ -724,6 +724,17 @@ Retroactive log from the start of this chat. Updated in real-time going forward.
   - PC join stays screenshot-assisted until a scanner lands.
 - **Status:** Implemented
 
+## DEC-058 Revocation rejects on every surface, online and off
+- **Date/Context:** Oct 2026, parallel revocation track merged to main
+- **Context/What:** A worker proved revoke coverage holey: only Owner gate missing trusted-phone enforcement plus per-surface rejects plus propagation. It tightened revoke to Owner-only per spec section 10, added per-surface reject tests across heartbeat, devices, trust graph, pairing, presence, push-token, attention, decision, refresh, and verify, plus online event plus reconnect-refused tests and a live e2e-revoke script. Verified here with 13 of 13 green on main.
+- **The "Why":** Revocation the server does not enforce everywhere is theater.
+- **Improvement over Previous Solution:** Replaced two-surface coverage with every-surface proof plus a rerunnable live script.
+- **Pros:**
+  - Worker ran green locally first, then again here after merge.
+- **Cons & Trade-offs:**
+  - Agent-side enforcement on stale sessions stays with the ConPTY-era hardening list.
+- **Status:** Implemented
+
 ## DEC-054 First glass pairing end to end
 - **Date/Context:** Sept 29 2026, live phone plus live backend on the tailnet
 - **Context/What:** Owner setup, session create, QR scan via screenshot decode, pcjoin, waiting card with matching fingerprint, Approve with fresh biometric, decision consumed the session, shell list showed the approved computer as RD-WIN-63BA4372 after the DEC-052 handoff fix. Update 34 to 38 earlier proved same-key updates through the app itself.
