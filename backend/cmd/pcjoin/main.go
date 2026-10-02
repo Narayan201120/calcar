@@ -10,6 +10,11 @@
 // bootstrap Owner, login, create session, join as PC, re-read the
 // session, assert the join landed. scripts/e2e-pairing.ps1 drives it.
 //
+// REFRESH-E2E: --refresh-e2e proves access+refresh rotation without a
+// phone (scripts/e2e-refresh.ps1 drives it): bootstrap Owner, login,
+// rotate twice with single-use REVOKED reuse checks, dead/expired
+// access plus live refresh restores, garbage refresh refused.
+//
 // Failure modes, each a distinct non-zero exit with the server body:
 //   - QR missing fields or v != 1: refused before any network call.
 //   - Backend unreachable: the URL is printed, nothing retried.
@@ -283,6 +288,173 @@ func runE2E(client *http.Client, backend, name string) {
 	fmt.Printf("pcjoin PASS: join landed, card would show %s named %s\n", fp, name)
 }
 
+// REFRESH-E2E: token rotation prover for scripts/e2e-refresh.ps1.
+// Bootstrap Owner, login (capture refresh), rotate twice with reuse
+// REVOKED checks, dead/expired access plus live refresh restores,
+// garbage refresh refused without leaking. Prints refresh PASS lines.
+func runRefreshE2E(client *http.Client, backend string) {
+	rid := func() string { return "e2e-refresh-" + ws.NewUUIDv4() }
+
+	ownerPub, ownerSeed, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		fail("refresh e2e: cannot generate Owner key: %v", err)
+	}
+	code, body := postJSON(client, backend+"/v1/users/bootstrap", map[string]string{"X-Request-ID": rid()}, map[string]any{
+		"display_name": "E2E Refresh Owner",
+		"pubkey_b64":   b64(ownerPub),
+		"device_id":    "PH-" + strings.ToUpper(ws.NewID()[:8]),
+	})
+	if code != http.StatusCreated {
+		fail("refresh e2e: bootstrap rejected (HTTP %d): %s", code, strings.TrimSpace(string(body)))
+	}
+	var boot struct {
+		UserID   string `json:"user_id"`
+		DeviceID string `json:"device_id"`
+	}
+	if err := json.Unmarshal(body, &boot); err != nil || boot.DeviceID == "" {
+		fail("refresh e2e: bootstrap reply unusable: %s", strings.TrimSpace(string(body)))
+	}
+	fmt.Println("refresh PASS: bootstrap ok")
+
+	loginPair := func() (string, string) {
+		c, b := postJSON(client, backend+"/v1/auth/challenge", nil, map[string]any{"device_id": boot.DeviceID})
+		if c != http.StatusOK {
+			fail("refresh e2e: challenge rejected (HTTP %d): %s", c, strings.TrimSpace(string(b)))
+		}
+		var ch struct {
+			Challenge string `json:"challenge"`
+		}
+		if err := json.Unmarshal(b, &ch); err != nil || ch.Challenge == "" {
+			fail("refresh e2e: challenge reply unusable: %s", strings.TrimSpace(string(b)))
+		}
+		sig := ed25519.Sign(ownerSeed, []byte(ch.Challenge))
+		c, b = postJSON(client, backend+"/v1/auth/verify", nil, map[string]any{
+			"device_id": boot.DeviceID, "challenge": ch.Challenge, "signature_b64": b64(sig),
+		})
+		if c != http.StatusOK {
+			fail("refresh e2e: verify rejected (HTTP %d): %s", c, strings.TrimSpace(string(b)))
+		}
+		var tok struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.Unmarshal(b, &tok); err != nil || tok.AccessToken == "" || tok.RefreshToken == "" {
+			fail("refresh e2e: verify reply unusable: %s", strings.TrimSpace(string(b)))
+		}
+		if tok.AccessToken == tok.RefreshToken {
+			fail("refresh e2e: access and refresh must differ")
+		}
+		return tok.AccessToken, tok.RefreshToken
+	}
+
+	doRefresh := func(rfr string) (string, string) {
+		c, b := postJSON(client, backend+"/v1/auth/refresh", map[string]string{"X-Request-ID": rid()}, map[string]any{
+			"device_id": boot.DeviceID, "refresh_token": rfr,
+		})
+		if c != http.StatusOK {
+			fail("refresh e2e: refresh rejected (HTTP %d): %s", c, strings.TrimSpace(string(b)))
+		}
+		var tok struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.Unmarshal(b, &tok); err != nil || tok.AccessToken == "" || tok.RefreshToken == "" {
+			fail("refresh e2e: refresh reply unusable: %s", strings.TrimSpace(string(b)))
+		}
+		return tok.AccessToken, tok.RefreshToken
+	}
+
+	mustAuthed := func(what, tok string) {
+		c, b := getJSON(client, backend+"/v1/devices", tok)
+		if c != http.StatusOK {
+			fail("refresh e2e: %s authed call rejected (HTTP %d): %s", what, c, strings.TrimSpace(string(b)))
+		}
+	}
+
+	mustReuseRevoked := func(what, rfr string) {
+		c, b := postJSON(client, backend+"/v1/auth/refresh", map[string]string{"X-Request-ID": rid()}, map[string]any{
+			"device_id": boot.DeviceID, "refresh_token": rfr,
+		})
+		if c != http.StatusUnauthorized {
+			fail("refresh e2e: %s reuse status %d, want 401: %s", what, c, strings.TrimSpace(string(b)))
+		}
+		var eb struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(b, &eb); err != nil || eb.Error != trust.CodeRevoked {
+			fail("refresh e2e: %s reuse code %q, want REVOKED: %s", what, eb.Error, strings.TrimSpace(string(b)))
+		}
+		if strings.Contains(string(b), rfr) {
+			fail("refresh e2e: %s reuse leaks token in body", what)
+		}
+		fmt.Printf("refresh PASS: %s reuse rejected REVOKED without leak\n", what)
+	}
+
+	_, rfr0 := loginPair()
+	fmt.Println("refresh PASS: login ok, refresh captured")
+
+	acc1, rfr1 := doRefresh(rfr0)
+	if rfr1 == rfr0 {
+		fail("refresh e2e: first rotation must mint a fresh refresh token")
+	}
+	mustAuthed("first rotation new access", acc1)
+	fmt.Println("refresh PASS: first rotation ok, new pair works")
+	mustReuseRevoked("first", rfr0)
+
+	acc2, rfr2 := doRefresh(rfr1)
+	if rfr2 == rfr1 {
+		fail("refresh e2e: second rotation must mint a fresh refresh token")
+	}
+	mustAuthed("second rotation new access", acc2)
+	fmt.Println("refresh PASS: second rotation ok, new pair works")
+	mustReuseRevoked("second", rfr1)
+
+	c, b := getJSON(client, backend+"/v1/devices", "dead-access-token-xyz")
+	if c != http.StatusUnauthorized && c != http.StatusForbidden {
+		fail("refresh e2e: dead access status %d, want 401/403: %s", c, strings.TrimSpace(string(b)))
+	}
+	fmt.Println("refresh PASS: dead access rejected")
+	acc3, rfr3 := doRefresh(rfr2)
+	mustAuthed("dead-access restore", acc3)
+	fmt.Println("refresh PASS: dead access plus live refresh restores session")
+
+	// Expiry: script starts the backend with TOKEN_TTL=2s so a short
+	// sleep turns the just-minted access token expired while the
+	// refresh half (30d) stays live.
+	time.Sleep(3 * time.Second)
+	c, b = getJSON(client, backend+"/v1/devices", acc3)
+	if c != http.StatusUnauthorized && c != http.StatusForbidden {
+		time.Sleep(2 * time.Second)
+		c, b = getJSON(client, backend+"/v1/devices", acc3)
+	}
+	if c != http.StatusUnauthorized && c != http.StatusForbidden {
+		fail("refresh e2e: expired access status %d, want 401/403: %s", c, strings.TrimSpace(string(b)))
+	}
+	fmt.Println("refresh PASS: expired access rejected")
+	acc4, _ := doRefresh(rfr3)
+	mustAuthed("expired-access restore", acc4)
+	fmt.Println("refresh PASS: expired access plus live refresh restores session")
+
+	garbage := "garbage-refresh-xyz-" + ws.NewUUIDv4()
+	c, b = postJSON(client, backend+"/v1/auth/refresh", map[string]string{"X-Request-ID": rid()}, map[string]any{
+		"device_id": boot.DeviceID, "refresh_token": garbage,
+	})
+	if c != http.StatusUnauthorized {
+		fail("refresh e2e: garbage refresh status %d, want 401: %s", c, strings.TrimSpace(string(b)))
+	}
+	var geb struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(b, &geb); err != nil || geb.Error != trust.CodeRevoked {
+		fail("refresh e2e: garbage refresh code %q, want REVOKED: %s", geb.Error, strings.TrimSpace(string(b)))
+	}
+	if strings.Contains(string(b), garbage) {
+		fail("refresh e2e: garbage refresh leaks token in body")
+	}
+	fmt.Println("refresh PASS: garbage refresh refused REVOKED without leak")
+	fmt.Println("refresh PASS: total refresh loop green")
+}
+
 func main() {
 	qrFlag := flag.String("qr", "", "Full calcar://pair/v1 QR URI from the phone screen")
 	sessionFlag := flag.String("session", "", "Session id (alternative to -qr)")
@@ -292,9 +464,15 @@ func main() {
 	keyoutFlag := flag.String("keyout", filepath.Join(os.TempDir(), "calcar-pcjoin.key"), "Where to save the PC seed (0600)")
 	backendFlag := flag.String("backend", e2eBackend, "Backend base URL for --e2e")
 	e2eFlag := flag.Bool("e2e", false, "Full loop without a phone against -backend dev backend")
+	// REFRESH-E2E: rotation prover flag (small, clearly marked).
+	refreshE2EFlag := flag.Bool("refresh-e2e", false, "Token rotation loop without a phone against -backend dev backend")
 	flag.Parse()
 
 	client := &http.Client{Timeout: joinTimeout}
+	if *refreshE2EFlag {
+		runRefreshE2E(client, strings.TrimRight(*backendFlag, "/"))
+		return
+	}
 	if *e2eFlag {
 		name := *nameFlag
 		if strings.TrimSpace(name) == "" {
