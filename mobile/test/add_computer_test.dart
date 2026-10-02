@@ -83,6 +83,7 @@ void main() {
       );
       expect(find.byKey(const Key('qr-placeholder')), findsOneWidget);
       expect(find.byType(QrImageView), findsOneWidget);
+      expect(find.byKey(const ValueKey('qr-nonce-text')), findsOneWidget);
       expect(find.text('QR: qr-nonce-1'), findsNothing);
       expect(find.text('Session: s-1'), findsOneWidget);
       expect(find.text('Expires in 09:07'), findsOneWidget);

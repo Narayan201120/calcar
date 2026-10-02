@@ -144,6 +144,11 @@ class AddComputerScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             if (sessionId != null) Text('Session: $sessionId'),
+            if (qrNonce != null && qrNonce!.isNotEmpty)
+              SelectableText(
+                'Nonce: ${qrNonce!}',
+                key: const ValueKey('qr-nonce-text'),
+              ),
             Text(_countdown()),
           ],
         );
