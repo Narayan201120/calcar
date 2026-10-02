@@ -27,6 +27,8 @@ const (
 	keyConn       = "conn:"
 	keyToken      = "tokens:"
 	keyTokenIndex = "tokens_by_device:"
+	keyRefresh    = "refresh:"
+	keyRefreshIdx = "refresh_by_device:"
 	keyChallenge  = "challenges:"
 	keyReplay     = "replay:"
 	keyNotify     = "notify:"
@@ -61,15 +63,17 @@ func NewStore(ctx context.Context, addr string) (*Store, error) {
 // Close drains the client.
 func (s *Store) Close() error { return s.cli.Close() }
 
-func pairingKey(id string) string    { return keyPairing + id }
-func presenceKey(id string) string   { return keyPresence + id }
-func connKey(id string) string       { return keyConn + id }
-func tokenKey(tok string) string     { return keyToken + tok }
-func tokenIndexKey(id string) string { return keyTokenIndex + id }
-func challengeKey(id string) string  { return keyChallenge + id }
-func replayKey(id string) string     { return keyReplay + id }
-func notifyKey(user string) string   { return keyNotify + user }
-func pushTokensKey(id string) string { return keyPushTokens + id }
+func pairingKey(id string) string      { return keyPairing + id }
+func presenceKey(id string) string     { return keyPresence + id }
+func connKey(id string) string         { return keyConn + id }
+func tokenKey(tok string) string       { return keyToken + tok }
+func tokenIndexKey(id string) string   { return keyTokenIndex + id }
+func challengeKey(id string) string    { return keyChallenge + id }
+func refreshKey(tok string) string     { return keyRefresh + tok }
+func refreshIndexKey(id string) string { return keyRefreshIdx + id }
+func replayKey(id string) string       { return keyReplay + id }
+func notifyKey(user string) string     { return keyNotify + user }
+func pushTokensKey(id string) string   { return keyPushTokens + id }
 
 // encodeAttention packs ids and kind only, never content.
 func encodeAttention(a store.Attention) string {
@@ -406,10 +410,14 @@ func (s *Store) ResolveAccessToken(ctx context.Context, token string) (string, s
 	return m["device_id"], m["user_id"], nil
 }
 
-// RevokeDeviceTokens drops every live token for a device. Already-gone tokens
-// stay gone: revoking twice is nil.
+// RevokeDeviceTokens drops every live access and refresh token for a
+// device. Already-gone tokens stay gone: revoking twice is nil.
 func (s *Store) RevokeDeviceTokens(ctx context.Context, deviceID string) error {
 	toks, err := s.cli.SMembers(ctx, tokenIndexKey(deviceID)).Result()
+	if err != nil {
+		return fmt.Errorf("redis: revoke tokens: %w", err)
+	}
+	rfr, err := s.cli.SMembers(ctx, refreshIndexKey(deviceID)).Result()
 	if err != nil {
 		return fmt.Errorf("redis: revoke tokens: %w", err)
 	}
@@ -417,11 +425,76 @@ func (s *Store) RevokeDeviceTokens(ctx context.Context, deviceID string) error {
 	for _, t := range toks {
 		pipe.Del(ctx, tokenKey(t))
 	}
+	for _, t := range rfr {
+		pipe.Del(ctx, refreshKey(t))
+	}
 	pipe.Del(ctx, tokenIndexKey(deviceID))
+	pipe.Del(ctx, refreshIndexKey(deviceID))
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("redis: revoke tokens: %w", err)
 	}
 	return nil
+}
+
+// IssueRefreshToken mints an opaque refresh token bound to device plus
+// user. Refresh tokens live in their own namespace so they never resolve
+// as access bearers via ResolveAccessToken.
+func (s *Store) IssueRefreshToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	if deviceID == "" || userID == "" || ttl <= 0 {
+		return "", fmt.Errorf("%w: device, user, and positive ttl are required", store.ErrConflict)
+	}
+	tok, err := newToken()
+	if err != nil {
+		return "", err
+	}
+	if err := s.cli.HSet(ctx, refreshKey(tok), map[string]any{
+		"device_id": deviceID,
+		"user_id":   userID,
+	}).Err(); err != nil {
+		return "", fmt.Errorf("redis: issue refresh: %w", err)
+	}
+	if err := s.cli.Expire(ctx, refreshKey(tok), ttl).Err(); err != nil {
+		return "", fmt.Errorf("redis: issue refresh: %w", err)
+	}
+	if err := s.cli.SAdd(ctx, refreshIndexKey(deviceID), tok).Err(); err != nil {
+		return "", fmt.Errorf("redis: issue refresh: %w", err)
+	}
+	_ = s.cli.Expire(ctx, refreshIndexKey(deviceID), ttl+time.Hour).Err()
+	return tok, nil
+}
+
+// consumeRefreshLua atomically validates the device binding and consumes
+// the refresh token. Only a device-id match deletes: mismatches leave the
+// token live so a mistyped device_id cannot burn someone else's token.
+// Missing keys answer nil, mismatches answer false, success the user id.
+const consumeRefreshLua = `
+local dev = redis.call('HGET', KEYS[1], 'device_id')
+if not dev then return nil end
+if dev ~= ARGV[1] then return false end
+local user = redis.call('HGET', KEYS[1], 'user_id')
+redis.call('DEL', KEYS[1])
+redis.call('SREM', KEYS[2], ARGV[2])
+return user
+`
+
+// ConsumeRefreshToken validates the device binding and invalidates the
+// token in one atomic step. Unknown, expired, or device-mismatched tokens
+// all report ErrNotFound: single use, fail closed, no half leaks.
+func (s *Store) ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken string) (string, error) {
+	if deviceID == "" || refreshToken == "" {
+		return "", store.ErrNotFound
+	}
+	got, err := s.cli.Eval(ctx, consumeRefreshLua,
+		[]string{refreshKey(refreshToken), refreshIndexKey(deviceID)},
+		deviceID, refreshToken).Result()
+	if err != nil {
+		return "", fmt.Errorf("redis: consume refresh: %w", err)
+	}
+	user, ok := got.(string)
+	if !ok || user == "" {
+		return "", store.ErrNotFound
+	}
+	return user, nil
 }
 
 // --- presence, push, attention, replay ---

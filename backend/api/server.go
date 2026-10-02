@@ -23,6 +23,10 @@ import (
 const (
 	// DefaultTokenTTL is the opaque access-token lifetime (24h per P3).
 	DefaultTokenTTL = 24 * time.Hour
+	// DefaultRefreshTTL is the opaque refresh-token lifetime (30d). A
+	// refresh token rotates into a fresh access+refresh pair via
+	// POST /v1/auth/refresh; each refresh token is single-use.
+	DefaultRefreshTTL = 30 * 24 * time.Hour
 	// RequestIDTTL bounds replay defence for mutation idempotency keys.
 	RequestIDTTL = 24 * time.Hour
 	// ChallengeExpiresIn is advertised for auth challenges; the store
@@ -49,22 +53,24 @@ const (
 // Server is the HTTP control plane. Construct with NewServer; it serves
 // the full route table itself so httptest and main share one wiring.
 type Server struct {
-	st       store.Store
-	hub      *ws.Hub
-	mux      *http.ServeMux
-	TokenTTL time.Duration
-	now      func() time.Time
+	st         store.Store
+	hub        *ws.Hub
+	mux        *http.ServeMux
+	TokenTTL   time.Duration
+	RefreshTTL time.Duration
+	now        func() time.Time
 }
 
 // NewServer wires all routes against st. The hub is created here and
 // driven by callers via Hub().Go(); Hub().Notify delivers WS signals.
 func NewServer(st store.Store) *Server {
 	s := &Server{
-		st:       st,
-		hub:      ws.NewHub(st),
-		mux:      http.NewServeMux(),
-		TokenTTL: DefaultTokenTTL,
-		now:      time.Now,
+		st:         st,
+		hub:        ws.NewHub(st),
+		mux:        http.NewServeMux(),
+		TokenTTL:   DefaultTokenTTL,
+		RefreshTTL: DefaultRefreshTTL,
+		now:        time.Now,
 	}
 	s.routes()
 	return s
@@ -84,6 +90,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /v1/users/bootstrap", s.handleBootstrap)
 	m.HandleFunc("POST /v1/auth/challenge", s.handleChallenge)
 	m.HandleFunc("POST /v1/auth/verify", s.handleVerify)
+	m.HandleFunc("POST /v1/auth/refresh", s.handleRefresh)
 	// Devices.
 	m.HandleFunc("GET /v1/devices", s.authed(s.handleDevicesList))
 	m.HandleFunc("POST /v1/devices", s.authed(s.handleDevicesRegister))
@@ -405,7 +412,8 @@ type verifyReq struct {
 
 // handleVerify checks the Ed25519 signature over the exact challenge
 // string bytes against the registered device pubkey, then mints an
-// opaque 24h token. Test-only signers are forbidden here by
+// opaque 24h access token plus a single-use 30d refresh token.
+// Test-only signers are forbidden here by
 // construction: verification uses only the stored pubkey.
 func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	var req verifyReq
@@ -445,10 +453,88 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "token issue failed", true)
 		return
 	}
+	rfr, err := s.st.IssueRefreshToken(ctx, dev.ID, dev.UserID, s.RefreshTTL)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "token issue failed", true)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"access_token":       tok,
-		"token_type":         "bearer",
-		"expires_in_seconds": int(s.TokenTTL / time.Second),
+		"access_token":               tok,
+		"token_type":                 "bearer",
+		"expires_in_seconds":         int(s.TokenTTL / time.Second),
+		"refresh_token":              rfr,
+		"refresh_expires_in_seconds": int(s.RefreshTTL / time.Second),
+	})
+}
+
+type refreshReq struct {
+	DeviceID     string `json:"device_id"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// handleRefresh rotates a single-use refresh token into a fresh
+// access+refresh pair. The presented token is consumed atomically: the
+// first use wins, every replay fails with 401 REVOKED. Revoked devices
+// fail closed with 403 REVOKED even when the token still resolves, and
+// revoked-token cleanup already drops refresh tokens alongside access
+// ones so post-revoke refresh also fails with 401 REVOKED.
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.idempotent(w, r); !ok {
+		return
+	}
+	var req refreshReq
+	if !decode(w, r, &req) {
+		return
+	}
+	deviceID := strings.TrimSpace(req.DeviceID)
+	if deviceID == "" || strings.TrimSpace(req.RefreshToken) == "" {
+		writeErr(w, http.StatusBadRequest, trust.CodeInvalidInput, "device_id and refresh_token required", false)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	dev, err := s.st.GetDevice(ctx, deviceID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "UNKNOWN_DEVICE", "unknown device", false)
+		return
+	}
+	if dev.Revoked {
+		writeErr(w, http.StatusForbidden, trust.CodeRevoked, "device revoked", false)
+		return
+	}
+	if revoked, rerr := s.st.IsRevoked(ctx, deviceID); rerr == nil && revoked {
+		writeErr(w, http.StatusForbidden, trust.CodeRevoked, "device revoked", false)
+		return
+	}
+	userID, err := s.st.ConsumeRefreshToken(ctx, deviceID, strings.TrimSpace(req.RefreshToken))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusUnauthorized, trust.CodeRevoked, "invalid or expired refresh token", false)
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "refresh failed", true)
+		return
+	}
+	if userID != dev.UserID {
+		writeErr(w, http.StatusUnauthorized, trust.CodeRevoked, "invalid or expired refresh token", false)
+		return
+	}
+	tok, err := s.st.IssueAccessToken(ctx, dev.ID, dev.UserID, s.TokenTTL)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "token issue failed", true)
+		return
+	}
+	rfr, err := s.st.IssueRefreshToken(ctx, dev.ID, dev.UserID, s.RefreshTTL)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "token issue failed", true)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"access_token":               tok,
+		"token_type":                 "bearer",
+		"expires_in_seconds":         int(s.TokenTTL / time.Second),
+		"refresh_token":              rfr,
+		"refresh_expires_in_seconds": int(s.RefreshTTL / time.Second),
 	})
 }
 

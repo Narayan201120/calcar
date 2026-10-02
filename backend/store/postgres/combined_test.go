@@ -95,6 +95,14 @@ func (f *fakeBackend) RevokeDeviceTokens(ctx context.Context, deviceID string) e
 	f.note("RevokeDeviceTokens")
 	return nil
 }
+func (f *fakeBackend) IssueRefreshToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error) {
+	f.note("IssueRefreshToken")
+	return "rfr", nil
+}
+func (f *fakeBackend) ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken string) (string, error) {
+	f.note("ConsumeRefreshToken")
+	return "u", nil
+}
 func (f *fakeBackend) SetPresence(ctx context.Context, p store.Presence) error {
 	f.note("SetPresence")
 	return nil
@@ -174,6 +182,8 @@ func TestCombinedRoutesEphemeralToRedis(t *testing.T) {
 		{"IssueChallenge", func() error { _, err := c.IssueChallenge(ctx, "d"); return err }},
 		{"ConsumeChallenge", func() error { return c.ConsumeChallenge(ctx, "d", "c") }},
 		{"IssueAccessToken", func() error { _, err := c.IssueAccessToken(ctx, "d", "u", time.Minute); return err }},
+		{"IssueRefreshToken", func() error { _, err := c.IssueRefreshToken(ctx, "d", "u", time.Hour); return err }},
+		{"ConsumeRefreshToken", func() error { _, err := c.ConsumeRefreshToken(ctx, "d", "r"); return err }},
 		{"ResolveAccessToken", func() error { _, _, err := c.ResolveAccessToken(ctx, "t"); return err }},
 		{"RevokeDeviceTokens", func() error { return c.RevokeDeviceTokens(ctx, "d") }},
 		{"EnqueueAttention", func() error { return c.EnqueueAttention(ctx, "u", store.Attention{}) }},

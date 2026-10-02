@@ -122,6 +122,15 @@ type Store interface {
 	IssueAccessToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error)
 	ResolveAccessToken(ctx context.Context, token string) (deviceID, userID string, err error)
 	RevokeDeviceTokens(ctx context.Context, deviceID string) error
+	// Refresh tokens (ephemeral, single-use rotation).
+	// IssueRefreshToken mints a long-lived opaque refresh token bound to
+	// device plus user. ConsumeRefreshToken atomically validates the
+	// device binding and invalidates the token: the first consume wins,
+	// every later use reports ErrNotFound. Unknown, expired, or
+	// device-mismatched tokens all report ErrNotFound so callers fail
+	// closed without leaking which half failed.
+	IssueRefreshToken(ctx context.Context, deviceID, userID string, ttl time.Duration) (string, error)
+	ConsumeRefreshToken(ctx context.Context, deviceID, refreshToken string) (userID string, err error)
 
 	// Presence, push, attention, replay (ephemeral).
 	SetPresence(ctx context.Context, p Presence) error
