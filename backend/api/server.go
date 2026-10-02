@@ -688,14 +688,16 @@ type revokeReq struct {
 }
 
 // handleDeviceRevoke revokes a same-user device and kills its tokens.
-// Caller must be a phone (Owner or trusted); computers get 403 per I2.
+// Caller must be the active Owner phone; trusted phones and computers
+// get 403 per the pairing spec section 10 (revoker must be an active
+// Owner Device at signing time).
 func (s *Server) handleDeviceRevoke(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.idempotent(w, r); !ok {
 		return
 	}
 	me := deviceOf(r)
-	if me.Role == store.RoleComputer {
-		writeErr(w, http.StatusForbidden, trust.CodeNotOwner, "computers cannot revoke devices", false)
+	if me.Role != store.RoleOwnerPhone {
+		writeErr(w, http.StatusForbidden, trust.CodeNotOwner, "only the Owner device revokes devices", false)
 		return
 	}
 	var req revokeReq
